@@ -1,17 +1,15 @@
 # `sysmon-mqtt` — Simple system monitoring over MQTT
 
-The `sysmon-mqtt`-script is used on a variety of single board computers (mainly
-Raspberry Pis) to provide basic performance metrics to Home Assistant.
+A simple shell-script to capture a handful of common metrics and push them over
+MQTT to [Home Assistant](https://www.home-assistant.io/).
 
-These used to be retrieved via SNMP (and for
-[some devices](../dd-wrt/README.md#snmp) they still are). That works fine, but
-felt a bit archaic and somewhat overkill for the purpose: Not all metrics were
-directly addressable via SNMP (e.g., retrieving CPU temperature required
-defining a custom OID and calling a shell-script) and most other metrics
-required further processing in Home Assistant to be usable.
+This script has been tested on recent versions of various Linux distributions
+(Ubuntu, Raspberry Pi OS, Armbian and Alpine) on AMD64, ARM(64) and RISC-V based
+devices. Given its relative simplicity, it probably works on virtually any Linux
+device that allows installing a handful of (generic) dependencies.
 
-Hence, `sysmon-mqtt`: A simple shell-script to capture a handful of common
-metrics and push them over MQTT to Home Assistant.
+Until December 2023, this script was part of my
+[Home Assistant configuration](https://github.com/thijsputman/home-assistant-config/tree/2ec7d637e642196f45a04fa0f99c0eeee4daba9d/extras/sysmon-mqtt)-repository.
 
 - [Version history](#version-history)
   - [1.2.2](#122)
@@ -126,8 +124,8 @@ This behaviour is intended to allow "fixed" sensor-entities in Home Assistant
 The `apt`-metric is presented as a Home Assistant
 [Update-entity](https://www.home-assistant.io/integrations/update.mqtt/). For
 its "entity-picture" to show, copy the images from
-[`📂 /www/sysmon-mqtt`](/www/sysmon-mqtt) into your Home Assistant's local
-webroot.
+[`📂 /extras/wwww`](/extras/www/) into a folder name `📂 sysmon-mqtt` in your
+Home Assistant's local webroot.
 
 To unregister (a set of) metrics from Home Assistant, simply remove their
 topics/messages from the `homeassistant/sensors/sysmon` tree with (for example)
@@ -167,11 +165,6 @@ and `mosquitto-clients`.
 
 **N.B.**, alternative versions of `awk` are _not_ supported; you need
 [GNU `awk`](https://www.gnu.org/software/gawk/manual/gawk.html).
-
-The script has been tested on recent versions of various Linux distributions
-(Ubuntu, Raspberry Pi OS, Armbian and Alpine) on both ARM and RISC-V based
-devices. Given its relative simplicity, it probably works on any Linux device
-where the above dependencies are available.
 
 ### Broker
 
@@ -241,7 +234,7 @@ The simplest (if slightly constrained) way of running the script is via the
 Docker-container published on
 [Docker Hub](https://hub.docker.com/r/thijsputman/sysmon-mqtt) and
 [GHCR](https://github.com/thijsputman/home-assistant-config/pkgs/container/sysmon-mqtt).
-Container images are available for `amd64`, `arm64` and `armhf`.
+Container images are available for `amd64`, `arm64`, and `armhf`.
 
 For bandwidth monitoring to work, you'll need to mount the host's `/sys`-sysfs
 into the container (as is done in the below
