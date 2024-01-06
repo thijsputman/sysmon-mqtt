@@ -16,7 +16,7 @@ jobs:
         id: sysmon
         run: |
           semver=$(
-            ./extras/sysmon-mqtt/sysmon.sh --version | \
+            ./sysmon.sh --version | \
             grep -oE '[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+'
           )
           echo semver="v$semver" >> "$GITHUB_OUTPUT"
@@ -61,5 +61,11 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=min
-          context: ./extras/sysmon-mqtt
+          # Force the Docker-action to use a local context – otherwise it'll
+          # clone the repo again from GitHub. This is wasteful as we do a
+          # checkout anyway to get sysmon's version number...
+          # Also, this is relevant for local "gh act" runs where we want local/
+          # non-committed changes to be picked up (this is done in act by
+          # overriding the default "Checkout code"-action).
+          context: .
           platforms: linux/amd64,linux/arm64,linux/arm/v7
