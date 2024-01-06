@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+: "${version:=v0.0.2}"
+: "${GOPATH:="$HOME/go"}"
+
+temp_dir=$(mktemp -d)
+pushd "$temp_dir" > /dev/null || exit 1
+
+git clone https://gitlab.com/ribtoks/tdg.git > /dev/null 2>&1
+cd tdg || exit 1
+
+git checkout "tags/$version" > /dev/null 2>&1
+
+# Add "triple-X" as one of the comment prefixes
+git apply --ignore-space-change --ignore-whitespace - \
+  <<- EOF || : # "or true" to prevent "set -e" from exiting the script
+diff --git a/pkg/tdglib/todogenerator.go b/pkg/tdglib/todogenerator.go
+index faca56a..7e3951a 100644
+--- a/pkg/tdglib/todogenerator.go
++++ b/pkg/tdglib/todogenerator.go
+@@ -24,7 +24,7 @@ const (
+ )
+
+ var (
+-       commentPrefixes        = [...]string{"TODO", "FIXME", "BUG", "HACK"}
++       commentPrefixes        = [...]string{"TODO", "FIXME", "BUG", "HACK", "XXX"}
+        emptyRunes             = [...]rune{}
+        categoryIniKey         = "category"
+        issueIniKey            = "issue"
+EOF
+
+export GOFLAGS="-mod=vendor"
+go build -o "$GOPATH/bin/tdg" cmd/tdg/*
+
+echo "$(command -v tdg)@$version" && tdg -root "$temp_dir/tdg/cmd/tdg"
+
+popd > /dev/null || exit 1
+rm -rf "$temp_dir"

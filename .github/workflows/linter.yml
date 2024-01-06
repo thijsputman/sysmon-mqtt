@@ -2,14 +2,16 @@ name: Lint codebase
 
 "on":
   push:
-    branches: ["**"]
+    branches: [main, development]
     tags-ignore: ["**"]
   pull_request:
-    branches: [main]
+    branches: ["**"]
 jobs:
   lint:
     name: Run pre-commit
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         with:
@@ -45,14 +47,24 @@ jobs:
         with:
           go-version: "1.21"
           cache: false
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.10"
       - name: Install dependencies
         env:
           USE_PIPX: "false"
         run: .github/scripts/setup-pre-commit.sh
-        shell: bash
+      - name: Run pre-commit (PR)
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          pre-commit run --color=always \
+            --from-ref ${{ github.event.pull_request.base.sha }} \
+            --to-ref HEAD
+        env:
+          GH_ACTION_OUTPUT: true
       - name: Run pre-commit
+        if: ${{ github.event_name == 'push' }}
         run: pre-commit run --color=always --all-files
-        shell: bash
+        env:
+          GH_ACTION_OUTPUT: true

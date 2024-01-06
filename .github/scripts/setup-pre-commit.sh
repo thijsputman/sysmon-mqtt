@@ -3,6 +3,11 @@
 set -euo pipefail
 
 : "${USE_PIPX:=true}"
+# Provide a proper $GITHUB_WORKSPACE for local invocations (ie, two levels up
+# from the folder this script is in)
+: "${GITHUB_WORKSPACE:=$(dirname \
+  "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../") \
+  ")}"
 
 if ! [[ $PATH =~ (^|:)"${HOME}/.local/bin"(:|$) ]]; then
   # shellcheck disable=SC2088
@@ -22,39 +27,18 @@ fi
 $pip_cmd install 'pre-commit==3.3.3'
 $pip_cmd install 'yamllint==1.32.0'
 
-# ShellCheck
 if ! command -v shellcheck; then
-
-  arch=$(uname -m)
-  shellcheck_base=https://github.com/koalaman/shellcheck/releases/download
-  shellcheck_version=v0.9.0
-
-  wget -nv -O- \
-    "${shellcheck_base}/${shellcheck_version}/shellcheck-${shellcheck_version}.linux.${arch}.tar.xz" |
-    tar -xJv
-  mv "shellcheck-${shellcheck_version}/shellcheck" ~/.local/bin
-  rm -rf "shellcheck-${shellcheck_version}"
-
-  command -v shellcheck
-
+  version=v0.9.0 "${GITHUB_WORKSPACE}/.github/scripts/bins.d/shellcheck"
 fi
 
-# hadolint
 if ! command -v hadolint; then
-
-  arch=$(uname -m)
-  hadolint_base=https://github.com/hadolint/hadolint/releases/download
-  hadolint_version=v2.12.0
-
-  wget -nv -O ~/.local/bin/hadolint \
-    "${hadolint_base}/${hadolint_version}/hadolint-Linux-${arch}"
-  chmod +x ~/.local/bin/hadolint
-
-  command -v hadolint
-
+  version=v2.12.0 "${GITHUB_WORKSPACE}/.github/scripts/bins.d/hadolint"
 fi
 
-# shfmt
 if ! command -v shfmt; then
   go install mvdan.cc/sh/v3/cmd/shfmt@v3.7.0
+fi
+
+if ! command -v tdg; then
+  version=v0.0.2 "${GITHUB_WORKSPACE}/.github/scripts/bins.d/tdg"
 fi

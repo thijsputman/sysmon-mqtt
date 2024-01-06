@@ -57,3 +57,8 @@ repos:
         entry: hadolint
         language: system
         types: [dockerfile]
+      - id: tdg
+        name: TODO get
+        entry: .github/scripts/tdg-pre-commit.sh
+        language: system
+        types: [text]
