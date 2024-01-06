@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+arch=$(uname -m)
+base=https://github.com/hadolint/hadolint/releases/download
+: "${version:=v2.12.0}"
+
+wget -nv -O ~/.local/bin/hadolint \
+  "${base}/${version}/hadolint-Linux-${arch}"
+chmod +x ~/.local/bin/hadolint
+
+command -v hadolint && hadolint --version

@@ -11,6 +11,7 @@ RUN case "$TARGETPLATFORM" in \
       linux/arm64)  arch=aarch64 ;; \
       linux/arm/v7) arch=armhf ;; \
       linux/amd64)  arch=x86_64 ;; \
+      linux/riscv64)  arch=riscv64 ;; \
       *) echo "Invalid target platform '$TARGETPLATFORM'!" && exit 1 ;; \
     esac && \
     # Download installers
