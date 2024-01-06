@@ -13,9 +13,16 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout code
+      - name: Checkout code (PR)
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/checkout@v3
         with:
-          persist-credentials: false
+          # Infite depth (without retrieving unrelated branches) – search
+          # <https://git-scm.com/docs/shallow> for this magic number...
+          fetch-depth: 2147483647
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Checkout code
+        if: ${{ github.event_name == 'push' }}
         uses: actions/checkout@v3
       - name: Cache dependencies
         uses: actions/cache@v3
