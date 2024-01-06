@@ -4,9 +4,10 @@ A simple shell-script to capture a handful of common metrics and push them over
 MQTT to [Home Assistant](https://www.home-assistant.io/).
 
 This script has been tested on recent versions of various Linux distributions
-(Ubuntu, Raspberry Pi OS, Armbian and Alpine) on AMD64, ARM(64) and RISC-V based
-devices. Given its relative simplicity, it probably works on virtually any Linux
-device that allows installing a handful of (generic) dependencies.
+(Ubuntu, Raspberry Pi OS, Armbian, Alpine, and DD-WRT) on AMD64, ARM(64) and
+RISC-V based devices. Given its relative simplicity, it probably works on
+virtually any Linux device that allows installing a handful of (generic)
+dependencies.
 
 Until December 2023, this script was part of my
 [Home Assistant configuration](https://github.com/thijsputman/home-assistant-config/tree/2ec7d637e642196f45a04fa0f99c0eeee4daba9d/extras/sysmon-mqtt)-repository.
@@ -159,12 +160,19 @@ before continuing...
 
 ## Setup
 
-The script depends on `apt`, `bash`,
-**[`gawk`](https://www.gnu.org/software/gawk/manual/gawk.html)**, `iw`, `jq`,
-and `mosquitto-clients`.
+The script depends on `bash`,
+**[`gawk`](https://www.gnu.org/software/gawk/manual/gawk.html)** (alternative
+versions of `awk` are _not_ supported; you need
+[GNU `awk`](https://www.gnu.org/software/gawk/manual/gawk.html)), `jq`, and
+`mosquitto-clients`.
 
-**N.B.**, alternative versions of `awk` are _not_ supported; you need
-[GNU `awk`](https://www.gnu.org/software/gawk/manual/gawk.html).
+Additionally, `apt` and `iw` are required to report APT status and WiFi
+signal-strength respectively – missing these dependencies is handled gracefully.
+
+When running on embedded/minimal systems (e.g. DD-WRT, or OpenWRT), apart from
+the above dependencies, `coreutils` most likely needs to be installed. In case
+this package is further split up (like on [Entware](https://entware.net/)),
+install `coreutils-mktemp`, `coreutils-nproc`, and `coreutils-timeout`.
 
 ### Broker
 
@@ -209,6 +217,11 @@ the script's behaviour:
   discovery topic
 - `SYSMON_INTERVAL` (default: `30`) — set the interval (in seconds) at which
   metrics are reported
+  - In principle, the interval can lowered all the way down to **zero** for
+    real-time reporting (which _will_ negatively impact system performance)
+  - When `rtt-hosts` are provided, the script automatically enforces a minimum
+    reporting interval to ensure the ping-command(s) have sufficient time to
+    complete
 - `SYSMON_APT` (default: `true`) — set to `false` to disable reporting
   APT-related metrics (`apt` and `reboot_required`)
   - Automatically disabled when no `apt`-binary is present, _or_ when running
