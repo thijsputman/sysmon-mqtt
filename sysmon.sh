@@ -290,7 +290,7 @@ ha_discover() {
   # Generic SBCs & embedded systems (e.g. OpenWRT)
   if [ -z "$payload_model" ]; then
     payload_model=$(
-      grep -i hardware /proc/cpuinfo | cut -d ':' -f2 || true
+      grep -i -m 1 hardware /proc/cpuinfo | cut -d ':' -f2 || true
     )
     payload_model="${payload_model/ /}"
   fi
@@ -298,7 +298,7 @@ ha_discover() {
   # PCs (and fallback)
   if [ -z "$payload_model" ]; then
     payload_model=$(
-      grep -i 'model name' /proc/cpuinfo | cut -d ':' -f2 || true
+      grep -i -m 1 'model name' /proc/cpuinfo | cut -d ':' -f2 || true
     )
     payload_model="${payload_model/ /}"
   fi
