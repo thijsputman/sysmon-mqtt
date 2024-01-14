@@ -20,6 +20,38 @@ fi
 : "${SYSMON_APT_CHECK:=}"
 : "${SYSMON_RTT_COUNT:=4}"
 
+# Simple daemon
+
+if [ "$1" == "--daemon" ]; then
+
+  trap 'trap - EXIT; [ -n "$(jobs -pr)" ] && kill $(jobs -pr)' \
+    INT HUP TERM EXIT
+
+  shift
+
+  echo 'Spawning sysmon-mqtt; redirecting all output to ~/sysmon-mqtt.log...'
+  echo "--- $(date -R) ---" >> ~/sysmon-mqtt.log
+
+  while true; do
+
+    nohup "$0" "$@" >> ~/sysmon-mqtt.log 2>&1 &
+
+    # Capture the child-process exit-code, while at the same time masking it
+    # from the shell (to prevent "set -e" from exiting us)
+    wait $! && rc=$? || rc=$?
+
+    printf 'Child exited with code %d; respawning in %d seconds...\n' \
+      "$rc" "$SYSMON_INTERVAL" >> ~/sysmon-mqtt.log
+
+    sleep $((10#$SYSMON_INTERVAL)) &
+    wait $!
+
+    echo "--- $(date -R) ---" >> ~/sysmon-mqtt.log
+
+  done
+
+fi
+
 # Compute number of ticks per hour; additionally, forces $SYSMON_INTERVAL to
 # base10 — exits in case of an invalid value for the interval
 

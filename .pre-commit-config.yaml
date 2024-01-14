@@ -38,7 +38,7 @@ repos:
         types: [file]
         files: (?i)(\.md|(^|/)(TODO|NOTES))$
       - id: yamllint-other
-        name: yamllint (other)
+        name: yamllint
         entry: yamllint -s
         language: system
         types: [yaml]
