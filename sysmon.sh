@@ -95,6 +95,12 @@ goodbye() {
   # Reset EXIT-trap to prevent getting stuck in "goodbye" (due to "set -e")
   trap - EXIT
 
+  # Terminate all child-processes
+  if [ -n "$(jobs -pr)" ]; then
+    read -ra pids < <(jobs -pr)
+    kill "${pids[@]}"
+  fi
+
   # Clean-up temporary files and fds/pipes
   if [ -v apt_check ] && [ -f "$apt_check" ]; then
     rm -f "$apt_check"
@@ -550,7 +556,8 @@ while true; do
       # If the reporting interval allows it, wait a couple of seconds – on slow
       # systems, running this right away (ie, while the "main" loop is active)
       # has a noticeable impact on the round-trip times...
-      sleep $((10#$SYSMON_INTERVAL * 2 / 10))
+      sleep $((10#$SYSMON_INTERVAL * 2 / 10)) &
+      wait $!
 
       for i in "${!rtt_hosts[@]}"; do
 
@@ -694,7 +701,7 @@ while true; do
     ticks=0
   fi
 
-  sleep "$((10#$SYSMON_INTERVAL))s" &
+  sleep $((10#$SYSMON_INTERVAL)) &
   wait $!
 
 done
