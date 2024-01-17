@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-SYSMON_MQTT_VERSION='1.2.2'
+SYSMON_MQTT_VERSION='1.3.0-dev'
 echo "sysmon-mqtt $SYSMON_MQTT_VERSION"
 
 if [ "$*" == "--version" ]; then
@@ -19,6 +19,41 @@ fi
 : "${SYSMON_APT:=true}"
 : "${SYSMON_APT_CHECK:=}"
 : "${SYSMON_RTT_COUNT:=4}"
+: "${SYSMON_DAEMON_LOG:="$HOME/sysmon-mqtt.log"}"
+
+# Simple daemon
+
+if [ "$1" == "--daemon" ]; then
+
+  touch "$SYSMON_DAEMON_LOG" || exit 1
+
+  trap 'trap - EXIT; [ -n "$(jobs -pr)" ] && kill $(jobs -pr); exit 0' \
+    INT HUP TERM EXIT
+
+  shift
+
+  echo "Spawning sysmon-mqtt; redirecting all output to $SYSMON_DAEMON_LOG..."
+  echo "--- $(date -R) ---" >> "$SYSMON_DAEMON_LOG"
+
+  while true; do
+
+    nohup "$0" "$@" >> "$SYSMON_DAEMON_LOG" 2>&1 &
+
+    # Capture the child-process exit-code, while at the same time masking it
+    # from the shell (to prevent "set -e" from exiting us)
+    wait $! && rc=$? || rc=$?
+
+    printf 'Child exited with code %d; respawning in %d seconds...\n' \
+      "$rc" "$SYSMON_INTERVAL" >> "$SYSMON_DAEMON_LOG"
+
+    sleep $((10#$SYSMON_INTERVAL)) &
+    wait $!
+
+    echo "--- $(date -R) ---" >> "$SYSMON_DAEMON_LOG"
+
+  done
+
+fi
 
 # Compute number of ticks per hour; additionally, forces $SYSMON_INTERVAL to
 # base10 — exits in case of an invalid value for the interval
@@ -40,6 +75,20 @@ device_name="${2:?"Missing device name!"}"
 read -r -a eth_adapters <<< "${3:-}"
 read -r -a rtt_hosts <<< "${4:-}"
 
+# When round-trip times are to be reported, ensure the reporting interval is
+# longer than the maximum time required to complete all of the ping-commands.
+# This to prevent people from shooting themselves in the foot by setting the
+# interval too low and spawning an ever increasing number of ping-commands.
+
+if [ ${#rtt_hosts[@]} -gt 0 ]; then
+  minimum_interval=$(((10#$SYSMON_RTT_COUNT + 1) * ${#rtt_hosts[@]} + (\
+    10#$SYSMON_INTERVAL * 2 / 10)))
+  if [ $((10#$SYSMON_INTERVAL)) -lt $minimum_interval ]; then
+    echo " \-> Increased SYSMON_INTERVAL to $minimum_interval"
+    SYSMON_INTERVAL=$minimum_interval
+  fi
+fi
+
 # Exit-trap handler
 
 goodbye() {
@@ -48,6 +97,12 @@ goodbye() {
 
   # Reset EXIT-trap to prevent getting stuck in "goodbye" (due to "set -e")
   trap - EXIT
+
+  # Terminate all child-processes
+  if [ -n "$(jobs -pr)" ]; then
+    read -ra pids < <(jobs -pr)
+    kill "${pids[@]}"
+  fi
 
   # Clean-up temporary files and fds/pipes
   if [ -v apt_check ] && [ -f "$apt_check" ]; then
@@ -219,15 +274,37 @@ ha_discover() {
       printf "%s" "$name"
     } | jq -R -s '.'
   )
+  payload_model=""
 
-  # The use of cat is intentional here (it redirects "not found"-errors to
-  # /dev/null). Furthermore, no model is reported in (non-privileged) Docker-
-  # containers while <https://github.com/moby/moby/issues/43419> remains open...
-  # shellcheck disable=SC2002
+  # Attempt to retrieve the most sensible device model description
 
-  payload_model=$(
-    cat /sys/firmware/devicetree/base/model 2> /dev/null | tr -d '\0' || true
-  )
+  # Raspberry Pi,et al.
+  if [ -f /sys/firmware/devicetree/base/model ]; then
+    payload_model=$(
+      tr -d '\0' < /sys/firmware/devicetree/base/model || true
+    )
+  fi
+
+  # DD-WRT
+  if [ -z "$payload_model" ] && command -v nvram &> /dev/null; then
+    payload_model="$(nvram get DD_BOARD)"
+  fi
+
+  # Generic SBCs & embedded systems (e.g. OpenWRT)
+  if [ -z "$payload_model" ]; then
+    payload_model=$(
+      grep -i -m 1 hardware /proc/cpuinfo | cut -d ':' -f2 || true
+    )
+    payload_model="${payload_model/ /}"
+  fi
+
+  # PCs (and fallback)
+  if [ -z "$payload_model" ]; then
+    payload_model=$(
+      grep -i -m 1 'model name' /proc/cpuinfo | cut -d ':' -f2 || true
+    )
+    payload_model="${payload_model/ /}"
+  fi
 
   # Attempt to retrieve existing UUID; otherwise generate a new one
 
@@ -308,7 +385,7 @@ if [ "$SYSMON_HA_DISCOVER" = true ]; then
     ha_discover "Bandwidth out (${eth_adapter})" "bandwidth/${eth_adapter}/tx" \
       mdi:upload-network data_rate kbit/s
 
-    if [[ $eth_adapter =~ ^wl ]]; then
+    if command -v iw &> /dev/null && [[ $eth_adapter =~ ^wl ]]; then
       ha_discover "Signal strength (${eth_adapter})" \
         "bandwidth/${eth_adapter}/signal" \
         mdi:wifi-strength-3 signal_strength dBm 0
@@ -375,7 +452,7 @@ payload_rtt=""
 
 # ZFS ARC — minimum size
 if [ -f /proc/spl/kstat/zfs/arcstats ]; then
-  zfs_arc_min=$(awk '/^c_min/ {printf "%.0f", $3/1024 }' < \
+  zfs_arc_min=$(gawk '/^c_min/ {printf "%.0f", $3/1024 }' < \
     /proc/spl/kstat/zfs/arcstats)
 fi
 
@@ -386,7 +463,7 @@ while true; do
 
   # CPU temperature
   if [ -r /sys/class/thermal/thermal_zone0/temp ]; then
-    cpu_temp=$(awk '{printf "%3.2f", $0/1000 }' < \
+    cpu_temp=$(gawk '{printf "%3.2f", $0/1000 }' < \
       /sys/class/thermal/thermal_zone0/temp)
   fi
 
@@ -397,26 +474,26 @@ while true; do
 
   # Load (1-minute load / # of cores)
   cpu_load=$(uptime |
-    awk "match(\$0, /load average: ([0-9\.]*),/, \
+    gawk "match(\$0, /load average: ([0-9\.]*),/, \
       result){printf \"%3.2f\", result[1]*100/$cpu_cores}")
 
   # Memory usage (1 - total / available)
-  mem_total=$(free | awk 'NR==2{print $2}')
-  mem_avail=$(free | awk 'NR==2{print $7}')
+  mem_total=$(free | gawk 'NR==2{print $2}')
+  mem_avail=$(free | gawk 'NR==2{print $7}')
 
   # Account for ZFS ARC — this is "buff/cache", but counted as "used" by the
   # kernel in Linux. Approach taken from btop: If current ARC size is greater
   # than its minimum size (lower than which it'll never go), assume the surplus
   # to be available memory.
   if [ -v zfs_arc_min ] && [ -n "$zfs_arc_min" ]; then
-    zfs_arc_size=$(awk '/^size/ {printf "%.0f", $3/1024}' < \
+    zfs_arc_size=$(gawk '/^size/ {printf "%.0f", $3/1024}' < \
       /proc/spl/kstat/zfs/arcstats)
     if [ "$zfs_arc_size" -gt "$zfs_arc_min" ]; then
       mem_avail=$((mem_avail + zfs_arc_size - zfs_arc_min))
     fi
   fi
 
-  mem_used=$(awk \
+  mem_used=$(gawk \
     '{printf "%3.2f", (1-($1/$2))*100}' <<< "$mem_avail $mem_total")
 
   # Bandwith (in kbps; measured over the "sysmon interval")
@@ -436,16 +513,16 @@ while true; do
     if [ "${#rx_prev[@]}" -eq "${#eth_adapters[@]}" ]; then
 
       payload_rx=$(
-        awk '{printf "%3.2f", ($1-$2)/$3*8/1000}' \
+        gawk '{printf "%3.2f", ($1-$2)/$3*8/1000}' \
           <<< "$rx ${rx_prev[i]} $((10#$SYSMON_INTERVAL))"
       )
       payload_tx=$(
-        awk '{printf "%3.2f", ($1-$2)/$3*8/1000}' \
+        gawk '{printf "%3.2f", ($1-$2)/$3*8/1000}' \
           <<< "$tx ${tx_prev[i]} $((10#$SYSMON_INTERVAL))"
       )
 
       signal=''
-      if [[ $eth_adapter =~ ^wl ]]; then
+      if command -v iw &> /dev/null && [[ $eth_adapter =~ ^wl ]]; then
         signal=$(
           iw "$eth_adapter" link | grep -E 'signal: \-[[:digit:]]+ dBm' |
             grep -oE '\-[[:digit:]]+' || :
@@ -479,12 +556,22 @@ while true; do
     (
       rtt_times=()
 
+      # If the reporting interval allows it, wait a couple of seconds – on slow
+      # systems, running this right away (ie, while the "main" loop is active)
+      # has a noticeable impact on the round-trip times...
+      sleep $((10#$SYSMON_INTERVAL * 2 / 10)) &
+      wait $!
+
       for i in "${!rtt_hosts[@]}"; do
 
         rtt_host="${rtt_hosts[i]}"
 
+        # In case of DNS errors, or unreachable hosts, ping can take quite a
+        # while to complete – enforce a timeout (of roughly speaking two-seconds
+        # more than needed) to ensure a predictable maximum duration.
         readarray -t result < <(
-          ping -c "$((10#$SYSMON_RTT_COUNT))" \
+          timeout $((10#$SYSMON_RTT_COUNT + 1)) \
+            ping -c "$((10#$SYSMON_RTT_COUNT))" \
             "$rtt_host" | grep 'rtt\|round-trip' |
             grep -oE '[[:digit:]]+\.[[:digit:]]{3}' || :
         )
@@ -537,12 +624,12 @@ while true; do
       # Fork it off so we don't block on waiting for this to complete
       (
         # shellcheck disable=SC1004
-        apt_simulate=$(apt --simulate upgrade 2> /dev/null | awk \
+        apt_simulate=$(apt --simulate upgrade 2> /dev/null | gawk \
           'BEGIN{RS=""} ; match($0, \
             /The following packages will be upgraded:(.* not upgraded.)/,
           result){printf "%s", result[1]}')
 
-        apt_upgrades=$(tail -n 1 <<< "$apt_simulate" | awk \
+        apt_upgrades=$(tail -n 1 <<< "$apt_simulate" | gawk \
           'match($0, /([0-9]+) upgraded,/, result){printf "%d", result[1]}')
         if [ -z "$apt_upgrades" ]; then
           apt_upgrades=0
@@ -617,7 +704,7 @@ while true; do
     ticks=0
   fi
 
-  sleep "$((10#$SYSMON_INTERVAL))s" &
+  sleep $((10#$SYSMON_INTERVAL)) &
   wait $!
 
 done

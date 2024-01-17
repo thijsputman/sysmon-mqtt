@@ -4,15 +4,17 @@ A simple shell-script to capture a handful of common metrics and push them over
 MQTT to [Home Assistant](https://www.home-assistant.io/).
 
 This script has been tested on recent versions of various Linux distributions
-(Ubuntu, Raspberry Pi OS, Armbian and Alpine) on AMD64, ARM(64) and RISC-V based
-devices. Given its relative simplicity, it probably works on virtually any Linux
-device that allows installing a handful of (generic) dependencies.
+(Ubuntu, Raspberry Pi OS, Armbian, Alpine, and DD-WRT) on AMD64, ARM(64) and
+RISC-V based devices. Given its relative simplicity, it probably works on
+virtually any Linux device that allows installing a handful of (generic)
+dependencies.
 
 Until December 2023, this script was part of my
 [Home Assistant configuration](https://github.com/thijsputman/home-assistant-config/tree/2ec7d637e642196f45a04fa0f99c0eeee4daba9d/extras/sysmon-mqtt)-repository.
 
 - [Version history](#version-history)
-  - [1.2.2](#122)
+  - [`edge`](#edge)
+  - [1.2.2 / `stable`](#122--stable)
   - [1.2.1](#121)
   - [1.2.0](#120)
   - [1.1.0](#110)
@@ -24,12 +26,25 @@ Until December 2023, this script was part of my
 - [Setup](#setup)
   - [Broker](#broker)
 - [Usage](#usage)
+  - [Daemon-mode](#daemon-mode)
   - [Docker](#docker)
   - [`systemd`](#systemd)
 
 ## Version history
 
-### 1.2.2
+### `edge`
+
+- Simple daemon-mode to ensure `sysmon-mqtt` keeps running
+- Support embedded/minimal Linux-systems (e.g. DD-WRT, or OpenWRT)
+  - Delay the (asynchronous) ping-commands to prevent the high load while
+    running the main loop from interfering with the round-trip times on these
+    low-powered systems
+- More elaborate device model detection; should now report something sensible on
+  most devices
+- Enforce a (dynamic) minimum length for the reporting interval to prevent
+  potentially spawning an ever increasing number of ping-commands
+
+### 1.2.2 / `stable`
 
 - Report the overall system status (systemd-only; based on the output of
   `systemctl is-system-running`)
@@ -159,12 +174,19 @@ before continuing...
 
 ## Setup
 
-The script depends on `apt`, `bash`,
-**[`gawk`](https://www.gnu.org/software/gawk/manual/gawk.html)**, `iw`, `jq`,
-and `mosquitto-clients`.
+The script depends on `bash`,
+**[`gawk`](https://www.gnu.org/software/gawk/manual/gawk.html)** (alternative
+versions of `awk` are _not_ supported; you need
+[GNU `awk`](https://www.gnu.org/software/gawk/manual/gawk.html)), `jq`, and
+`mosquitto-clients`.
 
-**N.B.**, alternative versions of `awk` are _not_ supported; you need
-[GNU `awk`](https://www.gnu.org/software/gawk/manual/gawk.html).
+Additionally, `apt` and `iw` are required to report APT status and WiFi
+signal-strength respectively – missing these dependencies is handled gracefully.
+
+When running on embedded/minimal systems (e.g. DD-WRT, or OpenWRT), apart from
+the above dependencies, `coreutils` most likely needs to be installed. In case
+this package is further split up (like on [Entware](https://entware.net/)),
+install `coreutils-mktemp`, `coreutils-nproc`, and `coreutils-timeout`.
 
 ### Broker
 
@@ -184,9 +206,11 @@ restart)...
 From the shell:
 
 ```shell
-./sysmon.sh mqtt-broker device-name [network-adapters] [rtt-hosts]
+./sysmon.sh [--daemon] mqtt-broker device-name [network-adapters] [rtt-hosts]
 ```
 
+- `--daemon` (optional) – enable [daemon-mode](#daemon-mode); start a watchdog
+  to monitor the main `sysmon-mqtt` process
 - `mqtt-broker` — hostname or IP address of the MQTT-broker
 - `device-name` — **human-friendly** name of the device being monitored (e.g.,
   "My Raspberry Pi"); a low-fidelity version (`my_raspberry_pi`) is
@@ -207,8 +231,17 @@ the script's behaviour:
   to Home Assistant discovery topic
 - `SYSMON_HA_TOPIC` (default: `homeassistant`) — base for the Home Assistant
   discovery topic
+- `SYSMON_HA_VERSION` (default: `202308`) — specify Home Assistant version
+  compatibility (as `YYYYMM`); based on this some behaviours are modified:
+  - `>= 202308` do _not_ prepend device name to sensor name
+    ([home-assistant/core#95159](https://github.com/home-assistant/core/pull/95159))
 - `SYSMON_INTERVAL` (default: `30`) — set the interval (in seconds) at which
   metrics are reported
+  - In principle, the interval can lowered all the way down to **zero** for
+    real-time reporting (which _will_ negatively impact system performance)
+  - When `rtt-hosts` are provided, the script automatically enforces a minimum
+    reporting interval to ensure the ping-command(s) have sufficient time to
+    complete
 - `SYSMON_APT` (default: `true`) — set to `false` to disable reporting
   APT-related metrics (`apt` and `reboot_required`)
   - Automatically disabled when no `apt`-binary is present, _or_ when running
@@ -217,10 +250,8 @@ the script's behaviour:
   the file used to store APT-check's status
 - `SYSMON_RTT_COUNT` (default `4`) — number of ping-requests to send per
   iteration over which to average the round-trip time
-- `SYSMON_HA_VERSION` (default: `202308`) — specify Home Assistant version
-  compatibility (as `YYYYMM`); based on this some behaviours are modified:
-  - `>= 202308` do _not_ prepend device name to sensor name
-    ([home-assistant/core#95159](https://github.com/home-assistant/core/pull/95159))
+- `SYSMON_DAEMON_LOG` (default `~/sysmon-mqtt.log`) — file to redirect all
+  output to when running in [daemon-mode](#daemon-mode)
 
 Echo the `sysmon-mqtt` version and exit:
 
@@ -228,10 +259,28 @@ Echo the `sysmon-mqtt` version and exit:
 ./sysmon.sh --version
 ```
 
+### Daemon-mode
+
+As of version 1.3.0, `sysmon-mqtt` includes a simple daemon to ensure the main
+monitoring process keeps running (ie, is restarted if it terminates). This is
+primarily intended for embedded devices running minimal Linux-distributions
+lacking amenities like [Docker](#docker) or [systemd](#systemd).
+
+When started with `--daemon` as its _first_ argument, `sysmon-mqtt` will start
+in daemon-mode and fork off a child-process to do the actual work (all arguments
+after `--daemon` are passed directly to this child-process). Whenever the
+child-process exits, it will be restarted by the daemon after waiting
+`SYSMON_INTERVAL` seconds.
+
+All output is redirected to `📄 ~/sysmon-mqtt.log` – this can be controlled via
+the `SYSMON_DAEMON_LOG` environment variable.
+
+To stop the daemon, send a `SIGKILL` the _daemon_-process.
+
 ### Docker
 
-The simplest (if slightly constrained) way of running the script is via the
-Docker-container published on
+The most straightforward (if slightly constrained) way of running the script is
+via the Docker-container published on
 [Docker Hub](https://hub.docker.com/r/thijsputman/sysmon-mqtt) and
 [GHCR](https://github.com/thijsputman/home-assistant-config/pkgs/container/sysmon-mqtt).
 Container images are available for `amd64`, `arm64`, and `armhf`.
@@ -243,7 +292,7 @@ into the container (as is done in the below
 _latter_ approach (`iw` relies on the physical network adapter being accessible;
 mounting `/sys` doesn't suffice).
 
-The `/sys`-approach is preferred as it's more flexible (i.e., it can be used to
+The `/sys`-approach is preferred as it's more flexible (ie, it can be used to
 gather additional information such as the device model) and offers better
 security: The container's network remains isolated; instead it gains _read-only_
 access to `/sys` with Docker's AppArmor policies applied to prevent access to
@@ -254,7 +303,11 @@ inside the container though 😵 — see
 [moby#434199](https://github.com/moby/moby/issues/43419) for details. Until that
 issue is resolved, you'll need to run a privileged container (easiest, if
 slightly too broad, is via `privileged: true`) which is **_not_** worth the risk
-just to have the device model reported.
+just to have the proper device model reported.
+
+As of version 1.3.0, `sysmon-mqtt` falls back to a more generic device model in
+case it can't read from `/sys/firmware` (e.g., "Raspberry Pi 4 Model B Rev 1.2"
+becomes "BCM2835").
 
 If you don't care about bandwidth monitoring (and/or the device model), the
 `/sys`-mount can be removed.
@@ -275,6 +328,10 @@ services:
     # Mount host's /sys-sysfs (read-only) into the container
     volumes:
       - /sys:/sys:ro
+    # Alternatively, use host networking...
+    # network_mode: host
+    # ...or run in privileged mode (strongly discouraged)
+    # privileged: true
     environment:
       - MQTT_BROKER=
       - DEVICE_NAME=
