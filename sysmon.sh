@@ -19,34 +19,37 @@ fi
 : "${SYSMON_APT:=true}"
 : "${SYSMON_APT_CHECK:=}"
 : "${SYSMON_RTT_COUNT:=4}"
+: "${SYSMON_DAEMON_LOG:="$HOME/sysmon-mqtt.log"}"
 
 # Simple daemon
 
 if [ "$1" == "--daemon" ]; then
 
-  trap 'trap - EXIT; [ -n "$(jobs -pr)" ] && kill $(jobs -pr)' \
+  touch "$SYSMON_DAEMON_LOG" || exit 1
+
+  trap 'trap - EXIT; [ -n "$(jobs -pr)" ] && kill $(jobs -pr); exit 0' \
     INT HUP TERM EXIT
 
   shift
 
-  echo 'Spawning sysmon-mqtt; redirecting all output to ~/sysmon-mqtt.log...'
-  echo "--- $(date -R) ---" >> ~/sysmon-mqtt.log
+  echo "Spawning sysmon-mqtt; redirecting all output to $SYSMON_DAEMON_LOG..."
+  echo "--- $(date -R) ---" >> "$SYSMON_DAEMON_LOG"
 
   while true; do
 
-    nohup "$0" "$@" >> ~/sysmon-mqtt.log 2>&1 &
+    nohup "$0" "$@" >> "$SYSMON_DAEMON_LOG" 2>&1 &
 
     # Capture the child-process exit-code, while at the same time masking it
     # from the shell (to prevent "set -e" from exiting us)
     wait $! && rc=$? || rc=$?
 
     printf 'Child exited with code %d; respawning in %d seconds...\n' \
-      "$rc" "$SYSMON_INTERVAL" >> ~/sysmon-mqtt.log
+      "$rc" "$SYSMON_INTERVAL" >> "$SYSMON_DAEMON_LOG"
 
     sleep $((10#$SYSMON_INTERVAL)) &
     wait $!
 
-    echo "--- $(date -R) ---" >> ~/sysmon-mqtt.log
+    echo "--- $(date -R) ---" >> "$SYSMON_DAEMON_LOG"
 
   done
 
