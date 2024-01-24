@@ -49,7 +49,8 @@ jobs:
             echo semver="v$semver" >> "$GITHUB_OUTPUT"
           fi
       # The following tags are generated:
-      #  * on release – "multi-stage" semantic version, "latest" and SHA
+      #  * on release – "multi-stage" semantic version (for "release" semantic
+      #    version only), "latest" and SHA
       #  * push to main-branch – SHA
       #  * push to develop-branch – "edge" and SHA
       #  * push to pull-request – "pr-123" (ie, the PR number)
@@ -74,8 +75,8 @@ jobs:
             type=semver,pattern={{major}},value=${{ steps.sysmon.outputs.semver }}
             type=ref,event=pr
             type=edge,branch=develop
-            type=raw,value=latest,enable=${{ inputs.release }}
-            type=sha,enable=${{ contains(fromJSON('["main", "develop"]'), github.ref_name) || inputs.release }}
+            type=raw,value=latest,enable=${{ inputs.release && true || false }}
+            type=sha,enable=${{ contains(fromJSON('["main", "develop"]'), github.ref_name) || (inputs.release && true || false) }}
           # yamllint enable rule:line-length
           flavor: |
             latest=false
