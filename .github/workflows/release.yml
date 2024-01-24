@@ -1,0 +1,45 @@
+name: Release
+
+"on":
+  release:
+    types: [published]
+jobs:
+  lint:
+    uses: ./.github/workflows/linter.yml
+  build_push:
+    uses: ./.github/workflows/docker.yml
+    with:
+      release: true
+    secrets: inherit
+    needs: lint
+  release:
+    name: Publish release
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    needs: build_push
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Install GitHub CLI
+        # "env.ACT" is added by nektos/act locally – using from-/toJSON prevents
+        # the GitHub Actions VS Code extension from complaining about a
+        # potentially invalid context access...
+        if: ${{ fromJSON(toJSON(env)).ACT }}
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          gh_cli_file=gh_${GH_CLI_VERSION}_linux_amd64.tar.gz
+          wget $GH_CLI_URL/v$GH_CLI_VERSION/$gh_cli_file
+          tar -xzf $gh_cli_file
+          mv gh_${GH_CLI_VERSION}_linux_amd64/bin/gh ~/.local/bin
+        env:
+          GH_CLI_VERSION: 2.42.1
+          GH_CLI_URL: https://github.com/cli/cli/releases/download
+      - name: Attach "sysmon.sh" to release
+        if: ${{github.event.release.tag_name}}
+        run: |
+          gh release upload ${{github.event.release.tag_name}} \
+            ./sysmon.sh --clobber
+        env:
+          GITHUB_TOKEN: ${{ github.TOKEN }}

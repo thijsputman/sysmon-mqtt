@@ -5,6 +5,7 @@ name: Lint codebase
     branches: [main, develop]
     tags-ignore: ["**"]
   pull_request:
+  workflow_call:
 jobs:
   lint:
     name: Run pre-commit
