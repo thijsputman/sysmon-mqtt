@@ -14,7 +14,7 @@ Until December 2023, this script was part of my
 
 - [Version history](#version-history)
   - [`edge`](#edge)
-  - [1.2.2 / `stable`](#122--stable)
+  - [1.2.2 / `latest`](#122--latest)
   - [1.2.1](#121)
   - [1.2.0](#120)
   - [1.1.0](#110)
@@ -44,7 +44,7 @@ Until December 2023, this script was part of my
 - Enforce a (dynamic) minimum length for the reporting interval to prevent
   potentially spawning an ever increasing number of ping-commands
 
-### 1.2.2 / `stable`
+### 1.2.2 / `latest`
 
 - Report the overall system status (systemd-only; based on the output of
   `systemctl is-system-running`)
