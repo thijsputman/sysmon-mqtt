@@ -6,11 +6,16 @@ name: Release
 jobs:
   lint:
     uses: ./.github/workflows/linter.yml
+    permissions:
+      contents: read
   build_push:
     uses: ./.github/workflows/docker.yml
     with:
       release: true
     secrets: inherit
+    permissions:
+      contents: read
+      packages: write
     needs: lint
   release:
     name: Publish release
