@@ -139,8 +139,12 @@ mqtt_json_clean() {
     param="N $param"
   fi
 
+  # The more obvious tr-approach isn't guaranteed to work on BusyBox as its
+  # built-in tr might not support case-conversion. As gawk is required anyway,
+  # just use that instead on all platforms...
+
   param=$(echo "${param//[^A-Za-z0-9_ .-]/}" |
-    tr -s ' -.' _ | tr '[:upper:]' '[:lower:]')
+    tr -s ' -.' _ | gawk '{print tolower($0)}')
 
   if [ -z "$param" ]; then
     echo "Invalid parameter '$1' supplied!"
@@ -214,7 +218,7 @@ ha_discover() {
     entity=update
     if command -v lsb_release &> /dev/null; then
       entity_picture="/local/sysmon-mqtt/$(lsb_release -ds | cut -d ' ' -f1 |
-        tr '[:upper:]' '[:lower:]').png"
+        gawk '{print tolower($0)}').png"
     fi
     value_template="$value_json | to_json"
   elif [ "$attribute" = "reboot_required" ]; then
