@@ -5,7 +5,6 @@ name: Lint codebase
     branches: [main, develop]
     tags-ignore: ["**"]
   pull_request:
-    branches: ["**"]
 jobs:
   lint:
     name: Run pre-commit
@@ -22,7 +21,7 @@ jobs:
           fetch-depth: 2147483647
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Checkout code
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name != 'pull_request' }}
         uses: actions/checkout@v3
       - name: Restore cached dependencies
         id: cache-restore
@@ -64,18 +63,6 @@ jobs:
         env:
           USE_PIPX: "false"
         run: .github/scripts/setup-pre-commit.sh
-      - name: Cache dependencies
-        uses: actions/cache/save@v3
-        with:
-          path: |
-            ~/.cache/pre-commit
-            ~/.cache/pip
-            ~/.npm
-            ~/.local/bin
-            ~/.cache/go-build
-            ~/go/pkg/mod
-            ~/go/bin
-          key: ${{ steps.cache-restore.outputs.cache-primary-key }}
       - name: Run pre-commit (PR)
         if: ${{ github.event_name == 'pull_request' }}
         run: |
@@ -89,3 +76,16 @@ jobs:
         run: pre-commit run --color=always --all-files
         env:
           GH_ACTION_OUTPUT: true
+      - name: Cache dependencies
+        uses: actions/cache/save@v3
+        if: always()
+        with:
+          path: |
+            ~/.cache/pre-commit
+            ~/.cache/pip
+            ~/.npm
+            ~/.local/bin
+            ~/.cache/go-build
+            ~/go/pkg/mod
+            ~/go/bin
+          key: ${{ steps.cache-restore.outputs.cache-primary-key }}
