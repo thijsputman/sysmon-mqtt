@@ -3,7 +3,8 @@
 set -euo pipefail
 
 : "${version:=v0.0.2}"
-: "${GOPATH:="$HOME/go"}"
+: "${GOPATH:="$HOME/.local/go"}"
+export GOPATH
 
 temp_dir=$(mktemp -d)
 pushd "$temp_dir" > /dev/null || exit 1
