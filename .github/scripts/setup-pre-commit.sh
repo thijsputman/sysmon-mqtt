@@ -3,15 +3,21 @@
 set -euo pipefail
 
 : "${USE_PIPX:=true}"
+
 # Provide a proper $GITHUB_WORKSPACE for local invocations (ie, two levels up
 # from the folder this script is in)
 : "${GITHUB_WORKSPACE:=$(dirname \
   "$(realpath "$(dirname "${BASH_SOURCE[0]}")/../") \
   ")}"
 
+# Some of the scripts included below assume (if not explicitly specified) a non-
+# standard location for GOPATH – by explicitly setting it to the standard
+# location (for actions/setup-go) here, the problem is avoided...
+: "${GOPATH:="$HOME/go"}"
+export GOPATH
+
 if ! [[ $PATH =~ (^|:)"${HOME}/.local/bin"(:|$) ]]; then
-  # shellcheck disable=SC2088
-  echo '~/.local/bin is not on PATH; aborting...'
+  echo "$HOME/.local/bin is not on PATH; aborting..." >&2
   exit 1
 fi
 
@@ -35,10 +41,10 @@ if ! command -v hadolint; then
   version=v2.12.0 "${GITHUB_WORKSPACE}/.github/scripts/bins.d/hadolint"
 fi
 
-if ! command -v shfmt; then
-  go install mvdan.cc/sh/v3/cmd/shfmt@v3.7.0
-fi
-
 if ! command -v tdg; then
   version=v0.0.2 "${GITHUB_WORKSPACE}/.github/scripts/bins.d/tdg"
+fi
+
+if ! command -v shfmt; then
+  go install mvdan.cc/sh/v3/cmd/shfmt@v3.7.0
 fi

@@ -10,15 +10,10 @@ virtually any Linux device that allows installing a handful of (generic)
 dependencies.
 
 Until December 2023, this script was part of my
-[Home Assistant configuration](https://github.com/thijsputman/home-assistant-config/tree/2ec7d637e642196f45a04fa0f99c0eeee4daba9d/extras/sysmon-mqtt)-repository.
+[Home Assistant configuration](https://github.com/thijsputman/home-assistant-config/tree/2ec7d637e642196f45a04fa0f99c0eeee4daba9d/extras/sysmon-mqtt)-repository
+– release history prior to that point is preserved in
+[`📄 HISTORY.md`](./HISTORY.md).
 
-- [Version history](#version-history)
-  - [`edge`](#edge)
-  - [1.2.2 / `latest`](#122--latest)
-  - [1.2.1](#121)
-  - [1.2.0](#120)
-  - [1.1.0](#110)
-  - [1.0.0](#100)
 - [Metrics](#metrics)
   - [Heartbeat](#heartbeat)
   - [Home Assistant discovery](#home-assistant-discovery)
@@ -29,53 +24,6 @@ Until December 2023, this script was part of my
   - [Daemon-mode](#daemon-mode)
   - [Docker](#docker)
   - [`systemd`](#systemd)
-
-## Version history
-
-### `edge`
-
-- Simple daemon-mode to ensure `sysmon-mqtt` keeps running
-- Support embedded/minimal Linux-systems (e.g. DD-WRT, or OpenWRT)
-  - Delay the (asynchronous) ping-commands to prevent the high load while
-    running the main loop from interfering with the round-trip times on these
-    low-powered systems
-- More elaborate device model detection; should now report something sensible on
-  most devices
-- Enforce a (dynamic) minimum length for the reporting interval to prevent
-  potentially spawning an ever increasing number of ping-commands
-
-### 1.2.2 / `latest`
-
-- Report the overall system status (systemd-only; based on the output of
-  `systemctl is-system-running`)
-- When the bandwidth of a wireless adapater (ie, its name matches `wl*`) is
-  monitored, its signal-strength is also reported
-- `sysmon-mqtt` Version is reported as a diagnostic sensor in Home Assistant
-
-### 1.2.1
-
-- If `/sys/class/thermal/thermal_zone0/temp` cannot be read, `cpu_temp` is
-  omitted (instead of bringing down the script)
-
-### 1.2.0
-
-- Respect Home Assistant 2023.8
-  [MQTT entity-naming guidelines](https://github.com/home-assistant/core/pull/95159)
-  (can be toggled via `SYSMON_HA_VERSION`)
-- Report round-trip (ie, ping) times to user-defined host(s)
-- Set `state_class` to "measurement" for all sensors that have
-  `unit_of_measurement` defined
-- If sensor data is missing from the JSON-payload, ensure its state is set to
-  `Unknown` in Home Assistant
-
-### 1.1.0
-
-- Add monitoring of APT status ("updates available" and "reboot required")
-- Count ZFS ARC as "free" memory
-
-### 1.0.0
-
-- Initial release
 
 ## Metrics
 
@@ -104,6 +52,9 @@ Currently, the following metrics are provided:
 The metrics are provided as a JSON-object in the `sysmon/[device-name]/state`
 topic.
 
+Additionally, the version of the running `sysmon-mqtt`-script is provided in
+`sysmon/[device-name]/version`.
+
 ### Heartbeat
 
 A persistent `sysmon/[device-name]/connected` topic is provided as an indication
@@ -121,9 +72,6 @@ _second_ iteration; this is done because some of the metrics (`bandwidth`, `rtt`
 and `apt`) are – due to various technical reasons – only reported from the
 second iteration onwards...
 
-Additionally, the version of the running `sysmon-mqtt`-script is provided in
-`sysmon/[device-name]/version`.
-
 ### Home Assistant discovery
 
 By default, the script publishes
@@ -139,12 +87,11 @@ This behaviour is intended to allow "fixed" sensor-entities in Home Assistant
 The `apt`-metric is presented as a Home Assistant
 [Update-entity](https://www.home-assistant.io/integrations/update.mqtt/). For
 its "entity-picture" to show, copy the images from
-[`📂 /extras/wwww`](/extras/www/) into a folder name `📂 sysmon-mqtt` in your
+[`📂 /extras/wwww`](/extras/www/) into a folder named `📂 sysmon-mqtt` in your
 Home Assistant's local webroot.
 
-To unregister (a set of) metrics from Home Assistant, simply remove their
-topics/messages from the `homeassistant/sensors/sysmon` tree with (for example)
-`mosquitto_pub`.
+To unregister (a set of) metrics from Home Assistant, simply remove the device
+from the MQTT integration (under _Settings_).
 
 ### APT-check
 
@@ -415,7 +362,7 @@ without arguments to pull the latest version of the script:
 For the very brave, the script can be run from GitHub directly:
 
 ```shell
-curl -fsSL https://github.com/thijsputman/home-assistant-config/raw/main/\
-extras/sysmon-mqtt/install.sh | sudo -E bash -s - \
+curl -fsSL https://github.com/thijsputman/sysmon-mqtt/raw/main/install.sh |
+sudo -E bash -s - \
 mqtt-broker "Device Name" "eth0 wlan0" "8.8.8.8 google.com"
 ```
