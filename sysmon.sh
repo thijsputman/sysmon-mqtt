@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-SYSMON_MQTT_VERSION='1.3.0-dev'
+SYSMON_MQTT_VERSION='1.3.0'
 echo "sysmon-mqtt $SYSMON_MQTT_VERSION"
 
 if [ "$*" == "--version" ]; then
