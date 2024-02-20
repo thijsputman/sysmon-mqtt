@@ -363,7 +363,7 @@ without arguments to pull the latest version of the script:
 For the very brave, the script can be run from GitHub directly:
 
 ```shell
-curl -fsSL https://github.com/thijsputman/home-assistant-config/raw/main/\
-extras/sysmon-mqtt/install.sh | sudo -E bash -s - \
+curl -fsSL https://github.com/thijsputman/sysmon-mqtt/raw/main/install.sh |
+sudo -E bash -s - \
 mqtt-broker "Device Name" "eth0 wlan0" "8.8.8.8 google.com"
 ```
