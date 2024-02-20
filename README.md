@@ -52,6 +52,9 @@ Currently, the following metrics are provided:
 The metrics are provided as a JSON-object in the `sysmon/[device-name]/state`
 topic.
 
+Additionally, the version of the running `sysmon-mqtt`-script is provided in
+`sysmon/[device-name]/version`.
+
 ### Heartbeat
 
 A persistent `sysmon/[device-name]/connected` topic is provided as an indication
@@ -69,9 +72,6 @@ _second_ iteration; this is done because some of the metrics (`bandwidth`, `rtt`
 and `apt`) are – due to various technical reasons – only reported from the
 second iteration onwards...
 
-Additionally, the version of the running `sysmon-mqtt`-script is provided in
-`sysmon/[device-name]/version`.
-
 ### Home Assistant discovery
 
 By default, the script publishes
@@ -87,12 +87,11 @@ This behaviour is intended to allow "fixed" sensor-entities in Home Assistant
 The `apt`-metric is presented as a Home Assistant
 [Update-entity](https://www.home-assistant.io/integrations/update.mqtt/). For
 its "entity-picture" to show, copy the images from
-[`📂 /extras/wwww`](/extras/www/) into a folder name `📂 sysmon-mqtt` in your
+[`📂 /extras/wwww`](/extras/www/) into a folder named `📂 sysmon-mqtt` in your
 Home Assistant's local webroot.
 
-To unregister (a set of) metrics from Home Assistant, simply remove their
-topics/messages from the `homeassistant/sensors/sysmon` tree with (for example)
-`mosquitto_pub`.
+To unregister (a set of) metrics from Home Assistant, simply remove the device
+from the MQTT integration (under _Settings_).
 
 ### APT-check
 
