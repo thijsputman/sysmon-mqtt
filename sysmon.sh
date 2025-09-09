@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-SYSMON_MQTT_VERSION='1.3.0'
+SYSMON_MQTT_VERSION='1.3.1-dev'
 echo "sysmon-mqtt $SYSMON_MQTT_VERSION"
 
 if [ "$*" == "--version" ]; then
@@ -14,6 +14,7 @@ fi
 : "${SYSMON_HA_DISCOVER:=true}"
 : "${SYSMON_HA_TOPIC:=homeassistant}"
 : "${SYSMON_HA_VERSION:=202308}"
+: "${SYSMON_HA_BASE:=}"
 : "${SYSMON_INTERVAL:=30}"
 : "${SYSMON_IN_DOCKER:=false}"
 : "${SYSMON_APT:=true}"
@@ -217,8 +218,9 @@ ha_discover() {
     expire_after=0
     entity=update
     if command -v lsb_release &> /dev/null; then
-      entity_picture="/local/sysmon-mqtt/$(lsb_release -ds | cut -d ' ' -f1 |
-        gawk '{print tolower($0)}').png"
+      entity_picture="${SYSMON_HA_BASE%/}/local/sysmon-mqtt/$(
+        lsb_release -ds | cut -d ' ' -f1 | gawk '{print tolower($0)}'
+      ).png"
     fi
     value_template="$value_json | to_json"
   elif [ "$attribute" = "reboot_required" ]; then
