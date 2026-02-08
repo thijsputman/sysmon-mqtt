@@ -367,7 +367,7 @@ ha_discover() {
     tr -s ' ' <<- EOF
     {
       "name": $payload_name,
-      "object_id": "${device}_${attribute//\//_}",
+      "default_entity_id": "${entity}.${device}_${attribute//\//_}",
       "unique_id": "$unique_id",
       "device": {
           "identifiers": "sysmon_${device}",
