@@ -17,7 +17,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         uses: actions/checkout@v3
         with:
-          # Infite depth (without retrieving unrelated branches) – search
+          # Infinite depth (without retrieving unrelated branches) – search
           # <https://git-scm.com/docs/shallow> for this magic number...
           fetch-depth: 2147483647
           ref: ${{ github.event.pull_request.head.sha }}
@@ -73,7 +73,7 @@ jobs:
         env:
           GH_ACTION_OUTPUT: true
       - name: Run pre-commit
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name != 'pull_request' }}
         run: pre-commit run --color=always --all-files
         env:
           GH_ACTION_OUTPUT: true
