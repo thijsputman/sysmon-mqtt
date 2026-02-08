@@ -17,6 +17,7 @@ fi
 : "${SYSMON_HA_BASE:=}"
 : "${SYSMON_INTERVAL:=30}"
 : "${SYSMON_IN_DOCKER:=false}"
+: "${SYSMON_INTEL_GPU:=true}"
 : "${SYSMON_APT:=true}"
 : "${SYSMON_APT_CHECK:=}"
 : "${SYSMON_RTT_COUNT:=4}"
@@ -44,7 +45,7 @@ if [ "$1" == "--daemon" ]; then
     # from the shell (to prevent "set -e" from exiting us)
     wait $! && rc=$? || rc=$?
 
-    printf 'Child exited with code %d; respawning in %d seconds...\n' \
+    printf 'Child exited with code %d; re-spawning in %d seconds...\n' \
       "$rc" "$SYSMON_INTERVAL" >> "$SYSMON_DAEMON_LOG"
 
     sleep $((10#$SYSMON_INTERVAL)) &
@@ -64,8 +65,25 @@ hourly_ticks=$((3600 / 10#$SYSMON_INTERVAL))
 # APT-related metrics make no sense when running inside a Docker-container or
 # when APT is not present on the system
 
-if [ "$SYSMON_IN_DOCKER" = true ] || ! command -v apt &> /dev/null; then
+if [[ ${SYSMON_IN_DOCKER,,} == "true" ]] || ! command -v apt &> /dev/null; then
   SYSMON_APT=false
+fi
+
+# Intel GPU-metrics require `intel_gpu_top` (which, although present, might be
+# non-functional due to various permission issues)
+
+if
+  [[ ${SYSMON_INTEL_GPU,,} == "true" ]] &&
+    command -v intel_gpu_top &> /dev/null
+then
+  rc=0
+  timeout -s KILL --foreground 5s \
+    intel_gpu_top -s 100 -o - 2> /dev/null | head -3 > /dev/null || rc=$?
+  # On success, the expected result is SIGPIPE (141) – if we *don't* get that
+  # result, disable Intel GPU-metrics
+  if [[ $rc -ne 141 ]]; then
+    SYSMON_INTEL_GPU=false
+  fi
 fi
 
 # Positional parameters
@@ -90,6 +108,18 @@ if [ ${#rtt_hosts[@]} -gt 0 ]; then
   fi
 fi
 
+# Idem for the Intel GPU-metrics. They have a fixed duration of about 2.25-
+# seconds (3 is thus used for Bash arithmetic), and an initial delay of half
+# what is used for the round-trip times.
+
+if [[ ${SYSMON_INTEL_GPU,,} == "true" ]]; then
+  minimum_interval=$((3 + (10#$SYSMON_INTERVAL / 10)))
+  if [ $((10#$SYSMON_INTERVAL)) -lt $minimum_interval ]; then
+    echo " \-> Increased SYSMON_INTERVAL to $minimum_interval"
+    SYSMON_INTERVAL=$minimum_interval
+  fi
+fi
+
 # Exit-trap handler
 
 goodbye() {
@@ -101,16 +131,25 @@ goodbye() {
 
   # Terminate all child-processes
   if [ -n "$(jobs -pr)" ]; then
-    read -ra pids < <(jobs -pr)
+    readarray -t pids < <(jobs -pr)
     kill "${pids[@]}"
   fi
 
-  # Clean-up temporary files and fds/pipes
-  if [ -v apt_check ] && [ -f "$apt_check" ]; then
-    rm -f "$apt_check"
-  fi
+  # Clean-up fds/pipes and temporary-directory
   if { : >&3; } 2> /dev/null; then
     exec 3>&-
+  fi
+  if { : >&4; } 2> /dev/null; then
+    exec 4>&-
+  fi
+  if [[ -v temp_dir && -d "$temp_dir" ]]; then
+    rm -rf "$temp_dir"
+  fi
+
+  # Explicitly remove APT-check result – when `SYSMON_APT_CHECK` is provided,
+  # external tools might rely on it; prevent them from getting stale data
+  if [[ -v apt_check && -f "$apt_check" ]]; then
+    rm -f "$apt_check"
   fi
 
   # Sign-off from MQTT
@@ -334,7 +373,7 @@ ha_discover() {
     tr -s ' ' <<- EOF
     {
       "name": $payload_name,
-      "object_id": "${device}_${attribute//\//_}",
+      "default_entity_id": "${entity}.${device}_${attribute//\//_}",
       "unique_id": "$unique_id",
       "device": {
           "identifiers": "sysmon_${device}",
@@ -367,7 +406,7 @@ ha_discover() {
     -m "$payload" || true
 }
 
-if [ "$SYSMON_HA_DISCOVER" = true ]; then
+if [[ ${SYSMON_HA_DISCOVER,,} == "true" ]]; then
 
   ha_discover 'Version (sysmon-mqtt)' version mdi:new-box
 
@@ -382,6 +421,12 @@ if [ "$SYSMON_HA_DISCOVER" = true ]; then
 
   if [ -d /run/systemd/system ]; then
     ha_discover 'Status (systemd)' status mdi:list-status enum
+  fi
+
+  if [[ ${SYSMON_INTEL_GPU,,} == "true" ]]; then
+    ha_discover 'GPU load' gpu_load mdi:expansion-card '' %
+    ha_discover 'GPU power' gpu_power '' power W
+    ha_discover 'Package power' pkg_power '' power W
   fi
 
   for eth_adapter in "${eth_adapters[@]}"; do
@@ -406,7 +451,7 @@ if [ "$SYSMON_HA_DISCOVER" = true ]; then
 
   done
 
-  if [ "$SYSMON_APT" = true ]; then
+  if [[ ${SYSMON_APT,,} == "true" ]]; then
     ha_discover 'APT upgrades' apt mdi:package-up
     ha_discover 'Reboot required' reboot_required mdi:restart
   fi
@@ -424,7 +469,7 @@ _join() {
 _readfd() {
   local IFS=$'\n'
   local lines
-  if read -r -u "$1" -t 0 || false; then
+  if read -r -u "$1" -t 0 -n 0 || false; then
     read -r -u "$1" -d '' -a lines
     echo "${lines[@]}"
   fi
@@ -437,24 +482,34 @@ first_loop=true
 hourly=true
 ticks=0
 
+temp_dir=$(mktemp -d -t sysmon.XXXXXXXX)
+
 # APT-check output file (defaults to temporary file)
-if [ "$SYSMON_APT" = true ]; then
+if [[ ${SYSMON_APT,,} == "true" ]]; then
   if [ -n "$SYSMON_APT_CHECK" ]; then
     touch "$SYSMON_APT_CHECK" && apt_check="$SYSMON_APT_CHECK"
   else
-    apt_check=$(mktemp -t sysmon.apt-check.XXXXXXXX)
+    apt_check="$temp_dir/apt-check"
   fi
 fi
 
 # Round-trip times output ("anonymous" pipe; fd 3)
-if [ ${#rtt_hosts[@]} -gt 0 ]; then
-  rtt_result=$(mktemp -u -t sysmon.rtt.XXXXXXXX)
+if [[ ${#rtt_hosts[@]} -gt 0 ]]; then
+  rtt_result="$temp_dir/rtt"
   mkfifo "$rtt_result" && exec 3<> "$rtt_result"
-  rm -f "$rtt_result"
   unset -v rtt_result
 fi
 
 payload_rtt=""
+
+# Intel GPU-metrics output ("anonymous" pipe; fd 4)
+if [[ ${SYSMON_INTEL_GPU,,} == "true" ]]; then
+  intel_gpu_result="$temp_dir/intel_gpu"
+  mkfifo "$intel_gpu_result" && exec 4<> "$intel_gpu_result"
+  unset -v intel_gpu_result
+fi
+
+payload_intel_gpu=""
 
 # ZFS ARC — minimum size
 if [ -f /proc/spl/kstat/zfs/arcstats ]; then
@@ -468,9 +523,24 @@ while true; do
   uptime=$(cut -d ' ' -f1 < /proc/uptime)
 
   # CPU temperature
-  if [ -r /sys/class/thermal/thermal_zone0/temp ]; then
+
+  # Attempt to find the most appropriate thermal-zone
+  if [[ ! -v zone_temp ]]; then
+    zone_temp=thermal_zone0
+    for zone_path in /sys/class/thermal/thermal_zone*/type; do
+      [[ -r $zone_path ]] || continue
+      zone_type=$(< "$zone_path")
+      if [[ $zone_type =~ ^(cpu-thermal|x86_pkg_temp)$ ]]; then
+        zone_temp=${zone_path%/*}
+        zone_temp=${zone_temp##*/}
+        break
+      fi
+    done
+  fi
+
+  if [[ -r /sys/class/thermal/${zone_temp}/temp ]]; then
     cpu_temp=$(gawk '{printf "%3.2f", $0/1000 }' < \
-      /sys/class/thermal/thermal_zone0/temp)
+      "/sys/class/thermal/${zone_temp}/temp")
   fi
 
   # Status (systemd)
@@ -601,6 +671,49 @@ while true; do
 
   fi
 
+  # Intel GPU-metrics
+
+  if { : >&4; } 2> /dev/null; then
+
+    payload_intel_gpu=$(_readfd 4)
+
+    (
+      sleep $((10#$SYSMON_INTERVAL / 10)) &
+      wait $!
+
+      # Sample GPU-metrics 9-times (at 250ms interval); disregard the first
+      # three lines (two header lines, and the first sample – as that is often
+      # inflated), and average out the remaining 8.
+      result=$(
+        timeout -s KILL --foreground 5s \
+          intel_gpu_top -s 250 -o - 2> /dev/null | head -11 | tail -8 |
+          gawk '
+            NF >= 7 && $5+0 == $5 && $6+0 == $6 && $7+0 == $7 {
+              gpu_power += $5
+              pkg_power += $6
+              gpu_load += $7
+              n++
+            }
+            END {
+              if (n >= 8)
+                printf "%.2f %.2f %.2f", gpu_power/n, pkg_power/n, gpu_load/n
+            }'
+      ) || true # Prevent the SIGPIPE from triggering "pipefail"
+
+      if [[ -n $result ]]; then
+        read -r gpu_power pkg_power gpu_load <<< "$result"
+        tr -s ' ' <<- EOF >&4
+          "gpu_load": "$gpu_load",
+          "gpu_power": "$gpu_power",
+          "pkg_power": "$pkg_power",
+				EOF
+        printf '\0' >&4 # N.B., EOF-line should be indented with tabs!
+      fi
+
+    ) &
+
+  fi
+
   # APT & reboot-required
 
   payload_apt=()
@@ -623,7 +736,7 @@ while true; do
 
     # Run apt-check and its processing once per hour
 
-    if [ "$hourly" = true ]; then
+    if [[ ${hourly,,} == "true" ]]; then
 
       : > "$apt_check"
 
@@ -670,6 +783,7 @@ while true; do
       "mem_used": "$mem_used",
       $([ -v cpu_temp ] && echo "\"cpu_temp\": \"$cpu_temp\",")
       $([ -v status ] && echo "\"status\": \"$status\",")
+      $payload_intel_gpu
       "bandwidth": {
         $(_join , "${payload_bw[@]}")
       },
@@ -692,7 +806,7 @@ while true; do
   # (and those while gathering the first set of metrics) are not trapped and
   # will leave the connected-state as "-1".
 
-  if [ "$first_loop" = false ]; then
+  if [[ ${first_loop,,} == "false" ]]; then
 
     mosquitto_pub -r -q 1 -h "$mqtt_host" \
       -t "sysmon/$device/connected" -m "$(date +%s)" || true
