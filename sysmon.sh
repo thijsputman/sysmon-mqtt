@@ -517,9 +517,21 @@ while true; do
   uptime=$(cut -d ' ' -f1 < /proc/uptime)
 
   # CPU temperature
-  if [ -r /sys/class/thermal/thermal_zone0/temp ]; then
+
+  # Try to find the most appropriate thermal-zone
+  zone_temp=0
+  for zone_path in /sys/class/thermal/thermal_zone*/type; do
+    zone_type=$(< "$zone_path")
+    if [[ $zone_type =~ ^(cpu-thermal|x86_pkg_temp)$ ]]; then
+      zone_temp=${zone_path%/*}
+      zone_temp=${zone_temp##*/}
+      break
+    fi
+  done
+
+  if [[ -r /sys/class/thermal/${zone_temp}/temp ]]; then
     cpu_temp=$(gawk '{printf "%3.2f", $0/1000 }' < \
-      /sys/class/thermal/thermal_zone0/temp)
+      "/sys/class/thermal/${zone_temp}/temp")
   fi
 
   # Status (systemd)
