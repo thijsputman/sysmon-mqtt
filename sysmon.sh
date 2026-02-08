@@ -136,14 +136,20 @@ goodbye() {
   fi
 
   # Clean-up temporary files and fds/pipes
-  if [ -v apt_check ] && [ -f "$apt_check" ]; then
-    rm -f "$apt_check"
+  if [[ -v temp_dir && -d "$temp_dir" ]]; then
+    rm -rf "$temp_dir"
   fi
   if { : >&3; } 2> /dev/null; then
     exec 3>&-
   fi
   if { : >&4; } 2> /dev/null; then
     exec 4>&-
+  fi
+
+  # Explicitly remove APT-check result – when `SYSMON_APT_CHECK` is provided,
+  # external tools might rely on it; prevent them from getting stale data
+  if [[ -v apt_check && -f "$apt_check" ]]; then
+    rm -f "$apt_check"
   fi
 
   # Sign-off from MQTT
@@ -476,20 +482,21 @@ first_loop=true
 hourly=true
 ticks=0
 
+temp_dir=$(mktemp -d -t sysmon.XXXXXXXX)
+
 # APT-check output file (defaults to temporary file)
 if [[ ${SYSMON_APT,,} == "true" ]]; then
   if [ -n "$SYSMON_APT_CHECK" ]; then
     touch "$SYSMON_APT_CHECK" && apt_check="$SYSMON_APT_CHECK"
   else
-    apt_check=$(mktemp -t sysmon.apt-check.XXXXXXXX)
+    apt_check="$temp_dir/apt-check"
   fi
 fi
 
 # Round-trip times output ("anonymous" pipe; fd 3)
-if [ ${#rtt_hosts[@]} -gt 0 ]; then
-  rtt_result=$(mktemp -u -t sysmon.rtt.XXXXXXXX)
+if [[ ${#rtt_hosts[@]} -gt 0 ]]; then
+  rtt_result="$temp_dir/rtt"
   mkfifo "$rtt_result" && exec 3<> "$rtt_result"
-  rm -f "$rtt_result"
   unset -v rtt_result
 fi
 
@@ -497,9 +504,8 @@ payload_rtt=""
 
 # Intel GPU-metrics output ("anonymous" pipe; fd 4)
 if [[ ${SYSMON_INTEL_GPU,,} == "true" ]]; then
-  intel_gpu_result=$(mktemp -u -t sysmon.intel_gpu.XXXXXXXX)
+  intel_gpu_result="$temp_dir/intel_gpu"
   mkfifo "$intel_gpu_result" && exec 4<> "$intel_gpu_result"
-  rm -f "$intel_gpu_result"
   unset -v intel_gpu_result
 fi
 
