@@ -45,7 +45,7 @@ if [ "$1" == "--daemon" ]; then
     # from the shell (to prevent "set -e" from exiting us)
     wait $! && rc=$? || rc=$?
 
-    printf 'Child exited with code %d; respawning in %d seconds...\n' \
+    printf 'Child exited with code %d; re-spawning in %d seconds...\n' \
       "$rc" "$SYSMON_INTERVAL" >> "$SYSMON_DAEMON_LOG"
 
     sleep $((10#$SYSMON_INTERVAL)) &
@@ -65,7 +65,7 @@ hourly_ticks=$((3600 / 10#$SYSMON_INTERVAL))
 # APT-related metrics make no sense when running inside a Docker-container or
 # when APT is not present on the system
 
-if [ "$SYSMON_IN_DOCKER" = true ] || ! command -v apt &> /dev/null; then
+if [[ ${SYSMON_IN_DOCKER,,} == "true" ]] || ! command -v apt &> /dev/null; then
   SYSMON_APT=false
 fi
 
@@ -400,7 +400,7 @@ ha_discover() {
     -m "$payload" || true
 }
 
-if [ "$SYSMON_HA_DISCOVER" = true ]; then
+if [[ ${SYSMON_HA_DISCOVER,,} == "true" ]]; then
 
   ha_discover 'Version (sysmon-mqtt)' version mdi:new-box
 
@@ -445,7 +445,7 @@ if [ "$SYSMON_HA_DISCOVER" = true ]; then
 
   done
 
-  if [ "$SYSMON_APT" = true ]; then
+  if [[ ${SYSMON_APT,,} == "true" ]]; then
     ha_discover 'APT upgrades' apt mdi:package-up
     ha_discover 'Reboot required' reboot_required mdi:restart
   fi
@@ -477,7 +477,7 @@ hourly=true
 ticks=0
 
 # APT-check output file (defaults to temporary file)
-if [ "$SYSMON_APT" = true ]; then
+if [[ ${SYSMON_APT,,} == "true" ]]; then
   if [ -n "$SYSMON_APT_CHECK" ]; then
     touch "$SYSMON_APT_CHECK" && apt_check="$SYSMON_APT_CHECK"
   else
@@ -727,7 +727,7 @@ while true; do
 
     # Run apt-check and its processing once per hour
 
-    if [ "$hourly" = true ]; then
+    if [[ ${hourly,,} == "true" ]]; then
 
       : > "$apt_check"
 
@@ -797,7 +797,7 @@ while true; do
   # (and those while gathering the first set of metrics) are not trapped and
   # will leave the connected-state as "-1".
 
-  if [ "$first_loop" = false ]; then
+  if [[ ${first_loop,,} == "false" ]]; then
 
     mosquitto_pub -r -q 1 -h "$mqtt_host" \
       -t "sysmon/$device/connected" -m "$(date +%s)" || true
