@@ -17,6 +17,7 @@ fi
 : "${SYSMON_HA_BASE:=}"
 : "${SYSMON_INTERVAL:=30}"
 : "${SYSMON_IN_DOCKER:=false}"
+: "${SYSMON_INTEL_GPU:=true}"
 : "${SYSMON_APT:=true}"
 : "${SYSMON_APT_CHECK:=}"
 : "${SYSMON_RTT_COUNT:=4}"
@@ -68,6 +69,23 @@ if [ "$SYSMON_IN_DOCKER" = true ] || ! command -v apt &> /dev/null; then
   SYSMON_APT=false
 fi
 
+# Intel GPU-metrics require `intel_gpu_top` (which, although present, might be
+# non-functional due to various permission issues)
+
+if
+  [[ ${SYSMON_INTEL_GPU,,} == "true" ]] &&
+    command -v intel_gpu_top &> /dev/null
+then
+  rc=0
+  timeout -s KILL --foreground 5s \
+    intel_gpu_top -s 100 -o - 2> /dev/null | head -3 > /dev/null || rc=$?
+  # On success, the expected result is SIGPIPE (141) – if we *don't* get that
+  # result, disable Intel GPU-metrics
+  if [[ $rc -ne 141 ]]; then
+    SYSMON_INTEL_GPU=false
+  fi
+fi
+
 # Positional parameters
 
 mqtt_host="${1:?"Missing MQTT-broker hostname!"}"
@@ -84,6 +102,18 @@ read -r -a rtt_hosts <<< "${4:-}"
 if [ ${#rtt_hosts[@]} -gt 0 ]; then
   minimum_interval=$(((10#$SYSMON_RTT_COUNT + 1) * ${#rtt_hosts[@]} + (\
     10#$SYSMON_INTERVAL * 2 / 10)))
+  if [ $((10#$SYSMON_INTERVAL)) -lt $minimum_interval ]; then
+    echo " \-> Increased SYSMON_INTERVAL to $minimum_interval"
+    SYSMON_INTERVAL=$minimum_interval
+  fi
+fi
+
+# Idem for the Intel GPU-metrics. They have a fixed duration of about 2.25-
+# seconds (3 is thus used for Bash arithmetic), and an initial delay of half
+# what is used for the round-trip times.
+
+if [[ ${SYSMON_INTEL_GPU,,} == "true" ]]; then
+  minimum_interval=$((3 + (10#$SYSMON_INTERVAL / 10)))
   if [ $((10#$SYSMON_INTERVAL)) -lt $minimum_interval ]; then
     echo " \-> Increased SYSMON_INTERVAL to $minimum_interval"
     SYSMON_INTERVAL=$minimum_interval
@@ -111,6 +141,9 @@ goodbye() {
   fi
   if { : >&3; } 2> /dev/null; then
     exec 3>&-
+  fi
+  if { : >&4; } 2> /dev/null; then
+    exec 4>&-
   fi
 
   # Sign-off from MQTT
@@ -384,6 +417,12 @@ if [ "$SYSMON_HA_DISCOVER" = true ]; then
     ha_discover 'Status (systemd)' status mdi:list-status enum
   fi
 
+  if [[ ${SYSMON_INTEL_GPU,,} == "true" ]]; then
+    ha_discover 'GPU load' gpu_load mdi:expansion-card '' %
+    ha_discover 'GPU power' gpu_power '' power W
+    ha_discover 'Package power' pkg_power '' power W
+  fi
+
   for eth_adapter in "${eth_adapters[@]}"; do
 
     ha_discover "Bandwidth in (${eth_adapter})" "bandwidth/${eth_adapter}/rx" \
@@ -455,6 +494,16 @@ if [ ${#rtt_hosts[@]} -gt 0 ]; then
 fi
 
 payload_rtt=""
+
+# Intel GPU-metrics output ("anonymous" pipe; fd 4)
+if [[ ${SYSMON_INTEL_GPU,,} == "true" ]]; then
+  intel_gpu_result=$(mktemp -u -t sysmon.intel_gpu.XXXXXXXX)
+  mkfifo "$intel_gpu_result" && exec 4<> "$intel_gpu_result"
+  rm -f "$intel_gpu_result"
+  unset -v intel_gpu_result
+fi
+
+payload_intel_gpu=""
 
 # ZFS ARC — minimum size
 if [ -f /proc/spl/kstat/zfs/arcstats ]; then
@@ -601,6 +650,49 @@ while true; do
 
   fi
 
+  # Intel GPU-metrics
+
+  if { : >&4; } 2> /dev/null; then
+
+    payload_intel_gpu=$(_readfd 4)
+
+    (
+      sleep $((10#$SYSMON_INTERVAL / 10)) &
+      wait $!
+
+      # Sample GPU-metrics 9-times (at 250ms interval); disregard the first
+      # three lines (two header lines, and the first sample – as that is often
+      # inflated), and average out the remaining 8.
+      result=$(
+        timeout -s KILL --foreground 5s \
+          intel_gpu_top -s 250 -o - 2> /dev/null | head -11 | tail -8 |
+          gawk '
+            NF >= 7 && $5+0 == $5 && $6+0 == $6 && $7+0 == $7 {
+              gpu_power += $5
+              pkg_power += $6
+              gpu_load += $7
+              n++
+            }
+            END {
+              if (n >= 8)
+                printf "%.2f %.2f %.2f", gpu_power/n, pkg_power/n, gpu_load/n
+            }'
+      ) || true # Prevent the SIGPIPE from triggering "pipefail"
+
+      if [[ -n $result ]]; then
+        read -r gpu_power pkg_power gpu_load <<< "$result"
+        tr -s ' ' <<- EOF >&4
+          "gpu_load": "$gpu_load",
+          "gpu_power": "$gpu_power",
+          "pkg_power": "$pkg_power",
+				EOF
+        printf '\0' >&4 # N.B., EOF-line should be indented with tabs!
+      fi
+
+    ) &
+
+  fi
+
   # APT & reboot-required
 
   payload_apt=()
@@ -670,6 +762,7 @@ while true; do
       "mem_used": "$mem_used",
       $([ -v cpu_temp ] && echo "\"cpu_temp\": \"$cpu_temp\",")
       $([ -v status ] && echo "\"status\": \"$status\",")
+      $payload_intel_gpu
       "bandwidth": {
         $(_join , "${payload_bw[@]}")
       },
