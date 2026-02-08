@@ -136,14 +136,14 @@ goodbye() {
   fi
 
   # Clean-up temporary files and fds/pipes
-  if [[ -v temp_dir && -d "$temp_dir" ]]; then
-    rm -rf "$temp_dir"
-  fi
   if { : >&3; } 2> /dev/null; then
     exec 3>&-
   fi
   if { : >&4; } 2> /dev/null; then
     exec 4>&-
+  fi
+  if [[ -v temp_dir && -d "$temp_dir" ]]; then
+    rm -rf "$temp_dir"
   fi
 
   # Explicitly remove APT-check result – when `SYSMON_APT_CHECK` is provided,
