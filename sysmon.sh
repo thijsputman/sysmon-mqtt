@@ -256,7 +256,7 @@ ha_discover() {
   elif [ "$attribute" = "apt" ]; then
     expire_after=0
     entity=update
-    if command -v lsb_release &> /dev/null; then
+    if [[ -n $SYSMON_HA_BASE ]] && command -v lsb_release &> /dev/null; then
       entity_picture="${SYSMON_HA_BASE%/}/local/sysmon-mqtt/$(
         lsb_release -ds | cut -d ' ' -f1 | gawk '{print tolower($0)}'
       ).png"
