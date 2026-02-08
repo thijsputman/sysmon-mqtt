@@ -135,7 +135,7 @@ goodbye() {
     kill "${pids[@]}"
   fi
 
-  # Clean-up temporary files and fds/pipes
+  # Clean-up fds/pipes and temporary-directory
   if { : >&3; } 2> /dev/null; then
     exec 3>&-
   fi
@@ -469,7 +469,7 @@ _join() {
 _readfd() {
   local IFS=$'\n'
   local lines
-  if read -r -u "$1" -t 0 || false; then
+  if read -r -u "$1" -t 0 -n 0 || false; then
     read -r -u "$1" -d '' -a lines
     echo "${lines[@]}"
   fi
@@ -524,16 +524,19 @@ while true; do
 
   # CPU temperature
 
-  # Try to find the most appropriate thermal-zone
-  zone_temp=thermal_zone0
-  for zone_path in /sys/class/thermal/thermal_zone*/type; do
-    zone_type=$(< "$zone_path")
-    if [[ $zone_type =~ ^(cpu-thermal|x86_pkg_temp)$ ]]; then
-      zone_temp=${zone_path%/*}
-      zone_temp=${zone_temp##*/}
-      break
-    fi
-  done
+  # Attempt to find the most appropriate thermal-zone
+  if [[ ! -v zone_temp ]]; then
+    zone_temp=thermal_zone0
+    for zone_path in /sys/class/thermal/thermal_zone*/type; do
+      [[ -r $zone_path ]] || continue
+      zone_type=$(< "$zone_path")
+      if [[ $zone_type =~ ^(cpu-thermal|x86_pkg_temp)$ ]]; then
+        zone_temp=${zone_path%/*}
+        zone_temp=${zone_temp##*/}
+        break
+      fi
+    done
+  fi
 
   if [[ -r /sys/class/thermal/${zone_temp}/temp ]]; then
     cpu_temp=$(gawk '{printf "%3.2f", $0/1000 }' < \
