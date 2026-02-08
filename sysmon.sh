@@ -131,7 +131,7 @@ goodbye() {
 
   # Terminate all child-processes
   if [ -n "$(jobs -pr)" ]; then
-    read -ra pids < <(jobs -pr)
+    readarray -t pids < <(jobs -pr)
     kill "${pids[@]}"
   fi
 
@@ -525,7 +525,7 @@ while true; do
   # CPU temperature
 
   # Try to find the most appropriate thermal-zone
-  zone_temp=0
+  zone_temp=thermal_zone0
   for zone_path in /sys/class/thermal/thermal_zone*/type; do
     zone_type=$(< "$zone_path")
     if [[ $zone_type =~ ^(cpu-thermal|x86_pkg_temp)$ ]]; then
