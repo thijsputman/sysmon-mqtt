@@ -74,6 +74,9 @@ second iteration onwards...
 
 ### Home Assistant discovery
 
+**❗N.B.** The current version of the script publishes MQTT-payloads compatible
+with Home **Assistant 2025.10** and later.
+
 By default, the script publishes
 [Home Assistant discovery](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery)
 messages to the `homeassistant/sensors/sysmon` topic.
@@ -179,10 +182,6 @@ the script's behaviour:
   to Home Assistant discovery topic
 - `SYSMON_HA_TOPIC` (default: `homeassistant`) — base for the Home Assistant
   discovery topic
-- `SYSMON_HA_VERSION` (default: `202308`) — specify Home Assistant version
-  compatibility (as `YYYYMM`); based on this some behaviours are modified:
-  - `>= 202308` do _not_ prepend device name to sensor name
-    ([home-assistant/core#95159](https://github.com/home-assistant/core/pull/95159))
 - `SYSMON_INTERVAL` (default: `30`) — set the interval (in seconds) at which
   metrics are reported
   - In principle, the interval can lowered all the way down to **zero** for
