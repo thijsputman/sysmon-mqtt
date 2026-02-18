@@ -314,6 +314,10 @@ StartLimitBurst=3
 
 [Service]
 Type=simple
+# Required for the `intel_gpu_top`-implementation – as we're running a shell-
+# script in the first place, it probably doesn't hurt to toggle this off (which
+# restores the shell's "regular" behaviour)
+IgnoreSIGPIPE=false
 Restart=on-failure
 RestartSec=30
 # Update the below match your environment

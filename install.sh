@@ -82,6 +82,7 @@ if $install; then
 
 		[Service]
 		Type=simple
+    IgnoreSIGPIPE=false
 		Restart=on-failure
 		RestartSec=30
 		User=${SUDO_USER:-$(whoami)}
