@@ -5,7 +5,7 @@ set -euo pipefail
 SYSMON_MQTT_VERSION='1.3.1'
 echo "sysmon-mqtt $SYSMON_MQTT_VERSION"
 
-if [ "$*" == "--version" ]; then
+if [[ $* == "--version" ]]; then
   exit 0
 fi
 
@@ -25,11 +25,11 @@ fi
 
 # Simple daemon
 
-if [ "$1" == "--daemon" ]; then
+if [[ $1 == "--daemon" ]]; then
 
   touch "$SYSMON_DAEMON_LOG" || exit 1
 
-  trap 'trap - EXIT; [ -n "$(jobs -pr)" ] && kill $(jobs -pr); exit 0' \
+  trap 'trap - EXIT; [[ -n $(jobs -pr) ]] && kill $(jobs -pr); exit 0' \
     INT HUP TERM EXIT
 
   shift
@@ -99,10 +99,10 @@ read -r -a rtt_hosts <<< "${4:-}"
 # This to prevent people from shooting themselves in the foot by setting the
 # interval too low and spawning an ever increasing number of ping-commands.
 
-if [ ${#rtt_hosts[@]} -gt 0 ]; then
+if [[ ${#rtt_hosts[@]} -gt 0 ]]; then
   minimum_interval=$(((10#$SYSMON_RTT_COUNT + 1) * ${#rtt_hosts[@]} + (\
     10#$SYSMON_INTERVAL * 2 / 10)))
-  if [ $((10#$SYSMON_INTERVAL)) -lt $minimum_interval ]; then
+  if ((10#$SYSMON_INTERVAL < minimum_interval)); then
     echo " \-> Increased SYSMON_INTERVAL to $minimum_interval"
     SYSMON_INTERVAL=$minimum_interval
   fi
@@ -114,7 +114,7 @@ fi
 
 if [[ ${SYSMON_INTEL_GPU,,} == "true" ]]; then
   minimum_interval=$((3 + (10#$SYSMON_INTERVAL / 10)))
-  if [ $((10#$SYSMON_INTERVAL)) -lt $minimum_interval ]; then
+  if ((10#$SYSMON_INTERVAL < minimum_interval)); then
     echo " \-> Increased SYSMON_INTERVAL to $minimum_interval"
     SYSMON_INTERVAL=$minimum_interval
   fi
@@ -130,7 +130,7 @@ goodbye() {
   trap - EXIT
 
   # Terminate all child-processes
-  if [ -n "$(jobs -pr)" ]; then
+  if [[ -n $(jobs -pr) ]]; then
     readarray -t pids < <(jobs -pr)
     kill "${pids[@]}"
   fi
@@ -142,13 +142,13 @@ goodbye() {
   if { : >&4; } 2> /dev/null; then
     exec 4>&-
   fi
-  if [[ -v temp_dir && -d "$temp_dir" ]]; then
+  if [[ -v temp_dir && -d $temp_dir ]]; then
     rm -rf "$temp_dir"
   fi
 
   # Explicitly remove APT-check result – when `SYSMON_APT_CHECK` is provided,
   # external tools might rely on it; prevent them from getting stale data
-  if [[ -v apt_check && -f "$apt_check" ]]; then
+  if [[ -v apt_check && -f $apt_check ]]; then
     rm -f "$apt_check"
   fi
 
@@ -186,7 +186,7 @@ mqtt_json_clean() {
   param=$(echo "${param//[^A-Za-z0-9_ .-]/}" |
     tr -s ' -.' _ | gawk '{print tolower($0)}')
 
-  if [ -z "$param" ]; then
+  if [[ -z $param ]]; then
     echo "Invalid parameter '$1' supplied!"
     exit 1
   fi
@@ -240,20 +240,20 @@ ha_discover() {
 
   # Non-standard discovery-payloads
 
-  if [ "$attribute" = "heartbeat" ]; then
+  if [[ $attribute == "heartbeat" ]]; then
     expire_after=0
     availability_test=value
     state_topic="sysmon/$device/connected"
     value_template="(value | int(0) | as_datetime)"
-  elif [ "$attribute" = "version" ]; then
+  elif [[ $attribute == "version" ]]; then
     expire_after=0
     category=diagnostic
     availability_test=value
     state_topic="sysmon/$device/version"
     value_template=value
-  elif [ "$attribute" = "status" ]; then
+  elif [[ $attribute == "status" ]]; then
     value_template="$value_json"
-  elif [ "$attribute" = "apt" ]; then
+  elif [[ $attribute == "apt" ]]; then
     expire_after=0
     entity=update
     if [[ -n $SYSMON_HA_BASE ]] && command -v lsb_release &> /dev/null; then
@@ -262,7 +262,7 @@ ha_discover() {
       ).png"
     fi
     value_template="$value_json | to_json"
-  elif [ "$attribute" = "reboot_required" ]; then
+  elif [[ $attribute == "reboot_required" ]]; then
     entity=binary_sensor
     value_template="'ON' if ($value_json | int(0)) == 1 else 'OFF'"
   fi
@@ -287,7 +287,7 @@ ha_discover() {
 
   local availability_template
 
-  if [ "$expire_after" -gt 0 ]; then
+  if ((expire_after > 0)); then
     availability_template=$(
       tr -d '\n' <<- EOF
       'online' if (value | int(0) | as_datetime) + timedelta(
@@ -302,9 +302,9 @@ ha_discover() {
   # Set state_class to "measurement" if unit_of_measurement is defined; in case
   # of the Uptime-sensor set it to "total_increasing".
 
-  if [ -n "$unit" ]; then
+  if [[ -n $unit ]]; then
     state_class="measurement"
-    if [ "$attribute" == uptime ]; then
+    if [[ $attribute == "uptime" ]]; then
       state_class="total_increasing"
     fi
   fi
@@ -314,7 +314,7 @@ ha_discover() {
 
   payload_name=$(
     {
-      [ "$((10#$SYSMON_HA_VERSION))" -lt 202308 ] &&
+      ((10#$SYSMON_HA_VERSION < 202308)) &&
         printf "%s " "$device_name"
       printf "%s" "$name"
     } | jq -R -s '.'
@@ -324,19 +324,19 @@ ha_discover() {
   # Attempt to retrieve the most sensible device model description
 
   # Raspberry Pi,et al.
-  if [ -f /sys/firmware/devicetree/base/model ]; then
+  if [[ -f /sys/firmware/devicetree/base/model ]]; then
     payload_model=$(
       tr -d '\0' < /sys/firmware/devicetree/base/model || true
     )
   fi
 
   # DD-WRT
-  if [ -z "$payload_model" ] && command -v nvram &> /dev/null; then
+  if [[ -z $payload_model ]] && command -v nvram &> /dev/null; then
     payload_model="$(nvram get DD_BOARD)"
   fi
 
   # Generic SBCs & embedded systems (e.g. OpenWRT)
-  if [ -z "$payload_model" ]; then
+  if [[ -z $payload_model ]]; then
     payload_model=$(
       grep -i -m 1 hardware /proc/cpuinfo | cut -d ':' -f2 || true
     )
@@ -344,7 +344,7 @@ ha_discover() {
   fi
 
   # PCs (and fallback)
-  if [ -z "$payload_model" ]; then
+  if [[ -z $payload_model ]]; then
     payload_model=$(
       grep -i -m 1 'model name' /proc/cpuinfo | cut -d ':' -f2 || true
     )
@@ -364,7 +364,7 @@ ha_discover() {
     unique_id=""
   fi
 
-  if ! [[ "$unique_id" =~ ^[0-9a-z-]{36}$ ]]; then
+  if ! [[ $unique_id =~ ^[0-9a-z-]{36}$ ]]; then
     unique_id=$(< /proc/sys/kernel/random/uuid)
   fi
 
@@ -415,7 +415,7 @@ if [[ ${SYSMON_HA_DISCOVER,,} == "true" ]]; then
   ha_discover 'CPU load' cpu_load mdi:chip '' %
   ha_discover 'Memory usage' mem_used mdi:memory '' %
 
-  if [ -r /sys/class/thermal/thermal_zone0/temp ]; then
+  if [[ -r /sys/class/thermal/thermal_zone0/temp ]]; then
     ha_discover 'CPU temperature' cpu_temp '' temperature °C
   fi
 
@@ -486,7 +486,7 @@ temp_dir=$(mktemp -d -t sysmon.XXXXXXXX)
 
 # APT-check output file (defaults to temporary file)
 if [[ ${SYSMON_APT,,} == "true" ]]; then
-  if [ -n "$SYSMON_APT_CHECK" ]; then
+  if [[ -n $SYSMON_APT_CHECK ]]; then
     touch "$SYSMON_APT_CHECK" && apt_check="$SYSMON_APT_CHECK"
   else
     apt_check="$temp_dir/apt-check"
@@ -512,7 +512,7 @@ fi
 payload_intel_gpu=""
 
 # ZFS ARC — minimum size
-if [ -f /proc/spl/kstat/zfs/arcstats ]; then
+if [[ -f /proc/spl/kstat/zfs/arcstats ]]; then
   zfs_arc_min=$(gawk '/^c_min/ {printf "%.0f", $3/1024 }' < \
     /proc/spl/kstat/zfs/arcstats)
 fi
@@ -561,10 +561,10 @@ while true; do
   # kernel in Linux. Approach taken from btop: If current ARC size is greater
   # than its minimum size (lower than which it'll never go), assume the surplus
   # to be available memory.
-  if [ -v zfs_arc_min ] && [ -n "$zfs_arc_min" ]; then
+  if [[ -v zfs_arc_min && -n $zfs_arc_min ]]; then
     zfs_arc_size=$(gawk '/^size/ {printf "%.0f", $3/1024}' < \
       /proc/spl/kstat/zfs/arcstats)
-    if [ "$zfs_arc_size" -gt "$zfs_arc_min" ]; then
+    if ((zfs_arc_size > zfs_arc_min)); then
       mem_avail=$((mem_avail + zfs_arc_size - zfs_arc_min))
     fi
   fi
@@ -586,7 +586,7 @@ while true; do
     tx=$(< "/sys/class/net/${eth_adapter%%/*}/statistics/tx_bytes")
 
     # Only run when "prev" is initialised
-    if [ "${#rx_prev[@]}" -eq "${#eth_adapters[@]}" ]; then
+    if ((${#rx_prev[@]} == ${#eth_adapters[@]})); then
 
       payload_rx=$(
         gawk '{printf "%3.2f", ($1-$2)/$3*8/1000}' \
@@ -652,7 +652,7 @@ while true; do
             grep -oE '[[:digit:]]+\.[[:digit:]]{3}' || :
         )
 
-        if [ -v result ] && [ -n "${result[1]}" ]; then
+        if [[ -v result && -n ${result[1]} ]]; then
 
           rtt_times+=("$(
             tr -s ' ' <<- EOF
@@ -719,9 +719,9 @@ while true; do
   payload_apt=()
   reboot_required=0
 
-  if [ -v apt_check ]; then
+  if [[ -v apt_check ]]; then
 
-    if [ -s "$apt_check" ]; then
+    if [[ -s $apt_check ]]; then
 
       payload_apt+=("$(
         tr -s ' ' <<- EOF
@@ -750,7 +750,7 @@ while true; do
 
         apt_upgrades=$(tail -n 1 <<< "$apt_simulate" | gawk \
           'match($0, /([0-9]+) upgraded,/, result){printf "%d", result[1]}')
-        if [ -z "$apt_upgrades" ]; then
+        if [[ -z $apt_upgrades ]]; then
           apt_upgrades=0
           apt_summary="\"No packages can be upgraded.\""
         else
@@ -767,7 +767,7 @@ while true; do
 
     # Reboot-required
 
-    if [ -f /var/run/reboot-required ]; then
+    if [[ -f /var/run/reboot-required ]]; then
       reboot_required=1
     fi
 
@@ -819,7 +819,7 @@ while true; do
 
   ticks=$((ticks + 1))
   hourly=false
-  if [ "$ticks" -gt "$hourly_ticks" ]; then
+  if ((ticks > hourly_ticks)); then
     hourly=true
     ticks=0
   fi
