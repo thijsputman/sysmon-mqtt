@@ -88,7 +88,8 @@ The `apt`-metric is presented as a Home Assistant
 [Update-entity](https://www.home-assistant.io/integrations/update.mqtt/). For
 its "entity-picture" to show, copy the images from
 [`📂 /extras/wwww`](/extras/www/) into a folder named `📂 sysmon-mqtt` in your
-Home Assistant's local webroot.
+Home Assistant's local webroot, and set [`SYSMON_HA_BASE`](#usage) to your Home
+Assistant's base URL.
 
 To unregister (a set of) metrics from Home Assistant, simply remove the device
 from the MQTT integration (under _Settings_).
@@ -189,6 +190,9 @@ the script's behaviour:
   - When `rtt-hosts` are provided, the script automatically enforces a minimum
     reporting interval to ensure the ping-command(s) have sufficient time to
     complete
+- `SYSMON_HA_BASE` (default: `""`) – specify Home Assistant's base URL (e.g.,
+  `http://homeassistant.local`) to be used as the base for local image resources
+  (see [Home Assistant discovery](#home-assistant-discovery))
 - `SYSMON_APT` (default: `true`) — set to `false` to disable reporting
   APT-related metrics (`apt` and `reboot_required`)
   - Automatically disabled when no `apt`-binary is present, _or_ when running
@@ -318,7 +322,7 @@ User=[user]
 ExecStart=/usr/bin/env bash /home/<user>/sysmon.sh \
   mqtt-broker "Device Name" [network-adapters] [rtt-hosts]
 # Optional: Provide additional environment variables
-Environment=""
+Environment="SYSMON_HA_BASE=http://homeassistant.local"
 
 [Install]
 WantedBy=multi-user.target
@@ -345,15 +349,19 @@ distributions) is provided: [`📄 install.sh`](./install.sh). Once installed,
 running the script again will pull the latest version of `📄 sysmon.sh` from
 GitHub.
 
-The script requires `mqtt-broker` and `"Device Name"` to be provided.
-Optionally, `network-adapters` and `rtt-hosts` can also be passed in:
+The script requires an MQTT-broker address and "Device Name" to be provided.
+Optionally, lists of `network-adapters` and `rtt-hosts` can also be passed in:
 
 ```shell
-./install.sh mqtt-broker "Device Name" "eth0 wlan0" "router.local 8.8.8.8"
+export SYSMON_HA_BASE=http://homeassistant.local
+./install.sh mqtt-broker.local "Device Name" "eth0 wlan0" "router.local 8.8.8.8"
 ```
 
-Alternatively, if the service is already installed, the installer can be called
-without arguments to pull the latest version of the script:
+All environment-variables that start with `SYSMON_` have their current value
+automatically included in the service-definition.
+
+If the service is already installed, the installer can be called without
+arguments to pull the latest version of the script:
 
 ```shell
 ./install.sh
@@ -362,7 +370,8 @@ without arguments to pull the latest version of the script:
 For the very brave, the script can be run from GitHub directly:
 
 ```shell
+export SYSMON_HA_BASE=http://homeassistant.local
 curl -fsSL https://github.com/thijsputman/sysmon-mqtt/raw/main/install.sh |
-sudo -E bash -s - \
-mqtt-broker "Device Name" "eth0 wlan0" "8.8.8.8 google.com"
+  sudo -E bash -s - \
+    mqtt-broker.local "Device Name" "eth0 wlan0" "8.8.8.8 google.com"
 ```
