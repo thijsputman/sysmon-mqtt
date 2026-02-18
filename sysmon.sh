@@ -13,7 +13,6 @@ fi
 
 : "${SYSMON_HA_DISCOVER:=true}"
 : "${SYSMON_HA_TOPIC:=homeassistant}"
-: "${SYSMON_HA_VERSION:=202308}"
 : "${SYSMON_HA_BASE:=}"
 : "${SYSMON_INTERVAL:=30}"
 : "${SYSMON_IN_DOCKER:=false}"
@@ -312,13 +311,7 @@ ha_discover() {
   local payload_name
   local payload_model
 
-  payload_name=$(
-    {
-      ((10#$SYSMON_HA_VERSION < 202308)) &&
-        printf "%s " "$device_name"
-      printf "%s" "$name"
-    } | jq -R -s '.'
-  )
+  payload_name=$(printf "%s" "$name" | jq -R -s '.')
   payload_model=""
 
   # Attempt to retrieve the most sensible device model description
