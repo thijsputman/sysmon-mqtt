@@ -412,7 +412,11 @@ if [[ ${SYSMON_HA_DISCOVER,,} == "true" ]]; then
     ha_discover 'CPU temperature' cpu_temp '' temperature °C
   fi
 
-  if [ -d /run/systemd/system ]; then
+  if command -v sensors &> /dev/null && sensors it8613-\* &> /dev/null; then
+    ha_discover 'Fan speed' fan_speed mdi:fan '' RPM
+  fi
+
+  if [[ -d /run/systemd/system ]]; then
     ha_discover 'Status (systemd)' status mdi:list-status enum
   fi
 
@@ -457,6 +461,10 @@ _join() {
   local IFS="$1"
   shift
   echo "$*"
+}
+
+_optional_field() {
+  [[ -v 1 && -n ${!1} ]] && echo "\"$1\": \"${!1}\","
 }
 
 _readfd() {
@@ -532,13 +540,24 @@ while true; do
   fi
 
   if [[ -r /sys/class/thermal/${zone_temp}/temp ]]; then
+    # shellcheck disable=SC2034 # Indirect reference only
     cpu_temp=$(gawk '{printf "%3.2f", $0/1000 }' < \
-      "/sys/class/thermal/${zone_temp}/temp")
+      "/sys/class/thermal/${zone_temp}/temp" || true)
+  fi
+
+  # Fan speed
+  if command -v sensors &> /dev/null; then
+    # shellcheck disable=SC2034 # Indirect reference only
+    fan_speed=$(
+      sensors it8613-\* 2> /dev/null |
+        gawk '/fan[0-9]+/ {if ($2+0 > max) max = $2} END {print max}' || true
+    )
   fi
 
   # Status (systemd)
-  if [ -d /run/systemd/system ]; then
-    status=$(systemctl is-system-running || :)
+  if [[ -d /run/systemd/system ]]; then
+    # shellcheck disable=SC2034 # Indirect reference only
+    status=$(systemctl is-system-running || true)
   fi
 
   # Load (1-minute load / # of cores)
@@ -774,8 +793,9 @@ while true; do
       "uptime": "$uptime",
       "cpu_load": "$cpu_load",
       "mem_used": "$mem_used",
-      $([ -v cpu_temp ] && echo "\"cpu_temp\": \"$cpu_temp\",")
-      $([ -v status ] && echo "\"status\": \"$status\",")
+      $(_optional_field cpu_temp)
+      $(_optional_field fan_speed)
+      $(_optional_field status)
       $payload_intel_gpu
       "bandwidth": {
         $(_join , "${payload_bw[@]}")
