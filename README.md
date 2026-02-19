@@ -58,6 +58,42 @@ Additionally, the version of the running `sysmon-mqtt`-script is provided in
 
 ### Device-specific metrics
 
+#### Intel N100
+
+On an Intel N100 where
+[`intel_gpu_top`](https://launchpad.net/ubuntu/+source/intel-gpu-tools) is
+available (and properly configured, see below) the following additional metrics
+are provided:
+
+- `gpu_load` – GPU-load as a percentage of maximum nominal load
+- `gpu_power` – GPU power-consumption in Watt
+- `package_power` – Package (CPU/GPU) power-consumption in Watt
+
+These measurements probably work on many/most Intel-devices; they've only been
+tested to work on an Intel N100.
+
+The values reported are the average of several samples taking during the
+preceding monitoring interval (filtering out intermittent noise). They do not
+represent the averages over the _entire_ interval though...
+
+**❗N.B.** For data to be reported, the user running `sysmon-mqtt` needs to be
+able to access `intel_gpu_top` _without_ root-privileges. Full instructions are
+available here:
+<https://github.com/luisbocanegra/plasma-intel-gpu-monitor#requirements>
+
+In a nutshell:
+
+```shell
+sudo setcap cap_perfmon=ep /usr/bin/intel_gpu_top
+sudo sysctl kernel.perf_event_paranoid=2
+echo "kernel.perf_event_paranoid = 2" |
+  sudo tee /etc/sysctl.d/99-perf-event-paranoid.conf > /dev/null
+```
+
+The `setcap` setting sticks, but might not survive an update of the
+`intel_gpu_top`-binary. The above GitHub-link provides an elegant solution to
+that issue as well.
+
 #### LattePanda Mu
 
 On a [LattePanda Mu](https://www.lattepanda.com/lattepanda-mu) (specifically,
@@ -236,6 +272,12 @@ the script's behaviour:
   iteration over which to average the round-trip time
 - `SYSMON_DAEMON_LOG` (default `~/sysmon-mqtt.log`) — file to redirect all
   output to when running in [daemon-mode](#daemon-mode)
+- `SYSMON_INTEL_GPU` (default `true`) – use `intel_gpu_top` to report on
+  additional Intel CPU metrics
+  - This feature is automatically disabled
+    [when `intel_gpu_top` is not properly configured](#intel-n100), so unless
+    you explicitly want to disable these metrics there's not reason to set it to
+    `false`...
 - `SYSMON_FAN_SPEED` (default `false`) – enable fan speed measurement(s) using
   lm-sensors' `sensor`-command
   - Currently only supported on the [LattePanda Mu](#lattepanda-mu), expect
