@@ -15,6 +15,7 @@ Until December 2023, this script was part of my
 [`📄 HISTORY.md`](./HISTORY.md).
 
 - [Metrics](#metrics)
+  - [Device-specific metrics](#device-specific-metrics)
   - [Heartbeat](#heartbeat)
   - [Home Assistant discovery](#home-assistant-discovery)
   - [APT-check](#apt-check)
@@ -54,6 +55,39 @@ topic.
 
 Additionally, the version of the running `sysmon-mqtt`-script is provided in
 `sysmon/[device-name]/version`.
+
+### Device-specific metrics
+
+#### LattePanda Mu
+
+On a [LattePanda Mu](https://www.lattepanda.com/lattepanda-mu) (specifically,
+its DFR1142 Lite Carrier Board with the IT8613E-chip), the status of the fan
+connected to the carrier board's fan-header can be reported:
+
+- `fan_speed` – Fan speed in RPM
+
+The current implementation is crude: It will report the highest fan RPM in the
+output of lm-sensors' `sensors`-command for the `it8613`-chip. If multiple fans
+are connected (non-trivial on the carrier board; most likely possible on other
+boards), the measurement randomly oscillates between multiple fans...
+
+Thus, to enable the implementation, [`SYSMON_FAN_SPEED`](#usage) needs to be
+explicitly set to `true` (and will only remain `true` if an `it8613`-chip is
+present). Furthermore, a custom kernel driver needs to be compiled:
+
+```shell
+sudo apt install \
+  dkms \
+  lm-sensors
+git clone git@github.com:frankcrawford/it87.git && cd it87
+make clean
+sudo make dkms
+dkms status
+echo it87 | sudo tee /etc/modules-load.d/it87.conf > /dev/null
+sensors
+```
+
+More details on the kernel-driver: <https://github.com/frankcrawford/it87>
 
 ### Heartbeat
 
@@ -202,6 +236,10 @@ the script's behaviour:
   iteration over which to average the round-trip time
 - `SYSMON_DAEMON_LOG` (default `~/sysmon-mqtt.log`) — file to redirect all
   output to when running in [daemon-mode](#daemon-mode)
+- `SYSMON_FAN_SPEED` (default `false`) – enable fan speed measurement(s) using
+  lm-sensors' `sensor`-command
+  - Currently only supported on the [LattePanda Mu](#lattepanda-mu), expect
+    undefined behaviour when enabling this on other devices...
 
 Echo the `sysmon-mqtt` version and exit:
 

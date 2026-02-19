@@ -17,6 +17,7 @@ fi
 : "${SYSMON_INTERVAL:=30}"
 : "${SYSMON_IN_DOCKER:=false}"
 : "${SYSMON_INTEL_GPU:=true}"
+: "${SYSMON_FAN_SPEED:=false}"
 : "${SYSMON_APT:=true}"
 : "${SYSMON_APT_CHECK:=}"
 : "${SYSMON_RTT_COUNT:=4}"
@@ -85,6 +86,15 @@ then
   fi
 fi
 
+# The fan-speed implementation is crude, disable it unless an explicitly
+# supported chip is detected.
+if [[ ${SYSMON_FAN_SPEED,,} == "true" ]]; then
+  SYSMON_FAN_SPEED="false"
+  if command -v sensors &> /dev/null && sensors it8613-\* &> /dev/null; then
+    SYSMON_FAN_SPEED="true"
+  fi
+fi
+
 # Positional parameters
 
 mqtt_host="${1:?"Missing MQTT-broker hostname!"}"
@@ -131,7 +141,7 @@ goodbye() {
   # Terminate all child-processes
   if [[ -n $(jobs -pr) ]]; then
     readarray -t pids < <(jobs -pr)
-    kill "${pids[@]}"
+    kill -- "${pids[*]}" &> /dev/null || true
   fi
 
   # Clean-up fds/pipes and temporary-directory
@@ -412,7 +422,7 @@ if [[ ${SYSMON_HA_DISCOVER,,} == "true" ]]; then
     ha_discover 'CPU temperature' cpu_temp '' temperature °C
   fi
 
-  if command -v sensors &> /dev/null && sensors it8613-\* &> /dev/null; then
+  if [[ ${SYSMON_FAN_SPEED,,} == "true" ]]; then
     ha_discover 'Fan speed' fan_speed mdi:fan '' RPM
   fi
 
@@ -546,7 +556,8 @@ while true; do
   fi
 
   # Fan speed
-  if command -v sensors &> /dev/null; then
+  if [[ ${SYSMON_FAN_SPEED,,} == "true" ]] &&
+    command -v sensors &> /dev/null; then
     # shellcheck disable=SC2034 # Indirect reference only
     fan_speed=$(
       sensors it8613-\* 2> /dev/null |
