@@ -68,7 +68,11 @@ if $install; then
   sysmon_envs=()
   while IFS='=' read -r name value; do
     if [[ $name =~ ^SYSMON_.*$ ]]; then
-      sysmon_envs+=("Environment=\"$name=$value\"")
+      # Sanitize the value so it cannot break the systemd unit syntax.
+      # - Escape backslashes and double quotes.
+      # - Replace any newlines and carriage returns with spaces to keep a single line.
+      safe_value=$(printf '%s' "$value" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\r/ /g' | tr '\n' ' ')
+      sysmon_envs+=("Environment=\"$name=$safe_value\"")
     fi
   done < <(env)
 
@@ -82,7 +86,7 @@ if $install; then
 
 		[Service]
 		Type=simple
-    IgnoreSIGPIPE=false
+		IgnoreSIGPIPE=false
 		Restart=on-failure
 		RestartSec=30
 		User=${SUDO_USER:-$(whoami)}
