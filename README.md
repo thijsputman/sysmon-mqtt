@@ -450,6 +450,16 @@ arguments to pull the latest version of the script:
 ./install.sh
 ```
 
+By default, the setup-script installs from the `main`-branch (i.e., it takes the
+[most recent release](https://github.com/thijsputman/sysmon-mqtt/releases)). To
+install another version, set `SYSMON_INSTALL_COMMIT` to either a (partial)
+commit-hash, or a branch name prior to running the installer:
+
+```shell
+SYSMON_INSTALL_COMMIT=7a38346
+./install.sh
+```
+
 For the very brave, the script can be run from GitHub directly:
 
 ```shell

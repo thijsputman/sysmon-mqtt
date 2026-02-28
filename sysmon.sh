@@ -2,7 +2,13 @@
 
 set -euo pipefail
 
+: "${SYSMON_INSTALL_COMMIT:=main}"
 SYSMON_MQTT_VERSION='1.4.0'
+
+if [[ -n $SYSMON_INSTALL_COMMIT && ${SYSMON_INSTALL_COMMIT,,} != main ]]; then
+  SYSMON_MQTT_VERSION+="-${SYSMON_INSTALL_COMMIT,,}"
+fi
+
 echo "sysmon-mqtt $SYSMON_MQTT_VERSION"
 
 if [[ $* == "--version" ]]; then

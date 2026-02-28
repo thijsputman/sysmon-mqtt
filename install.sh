@@ -4,6 +4,8 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
+: "${SYSMON_INSTALL_COMMIT:=main}"
+
 install=false
 
 # If no service is present, always start the install-routine. Otherwise, only
@@ -36,7 +38,8 @@ if [[ ! -e /etc/systemd/system/sysmon-mqtt.service || -v 1 ]]; then
 
 fi
 
-sysmon_url="https://github.com/thijsputman/sysmon-mqtt/raw/main/sysmon.sh"
+sysmon_url="https://raw.githubusercontent.com/thijsputman/sysmon-mqtt/\
+  ${SYSMON_INSTALL_COMMIT,,}/sysmon.sh"
 
 if [[ -e /etc/systemd/system/sysmon-mqtt.service ]]; then
   systemctl stop sysmon-mqtt
@@ -63,6 +66,12 @@ chown "${SUDO_USER:-$(whoami)}:" "$sysmon_target"
 chmod +x "$sysmon_target"
 
 if $install; then
+
+  # Pass a (normalised) commit-ish along to the service definition
+  if [[ $SYSMON_INSTALL_COMMIT =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+    SYSMON_INSTALL_COMMIT=${SYSMON_INSTALL_COMMIT,,}
+    SYSMON_INSTALL_COMMIT=${SYSMON_INSTALL_COMMIT:0:7}
+  fi
 
   # Hoist all safe "SYSMON_*" variables into the service definition
   sysmon_envs=()
