@@ -90,6 +90,8 @@ then
   if [[ $rc -ne 141 ]]; then
     SYSMON_INTEL_GPU=false
   fi
+else
+  SYSMON_INTEL_GPU=false
 fi
 
 # The fan-speed implementation is crude, disable it unless an explicitly
