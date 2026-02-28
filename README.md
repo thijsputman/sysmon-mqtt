@@ -456,7 +456,7 @@ install another version, set `SYSMON_INSTALL_COMMIT` to either a (partial)
 commit-hash, or a branch name prior to running the installer:
 
 ```shell
-SYSMON_INSTALL_COMMIT=7a38346
+export SYSMON_INSTALL_COMMIT=7a38346
 ./install.sh
 ```
 
