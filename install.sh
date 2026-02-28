@@ -64,10 +64,10 @@ chmod +x "$sysmon_target"
 
 if $install; then
 
-  # Hoist all "SYSMON_*" environment variables into the service definition
+  # Hoist all safe "SYSMON_*" variables into the service definition
   sysmon_envs=()
   while IFS='=' read -r name value; do
-    if [[ $name =~ ^SYSMON_.*$ ]]; then
+    if [[ $name =~ ^SYSMON_.*$ ]] && [[ ! $value =~ [\\\"$'\n\r'] ]]; then
       sysmon_envs+=("Environment=\"$name=$value\"")
     fi
   done < <(env)
@@ -82,7 +82,7 @@ if $install; then
 
 		[Service]
 		Type=simple
-    IgnoreSIGPIPE=false
+		IgnoreSIGPIPE=false
 		Restart=on-failure
 		RestartSec=30
 		User=${SUDO_USER:-$(whoami)}

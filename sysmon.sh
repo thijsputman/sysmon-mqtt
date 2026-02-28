@@ -141,7 +141,7 @@ goodbye() {
   # Terminate all child-processes
   if [[ -n $(jobs -pr) ]]; then
     readarray -t pids < <(jobs -pr)
-    kill -- "${pids[*]}" &> /dev/null || true
+    kill -- "${pids[@]}" &> /dev/null || true
   fi
 
   # Clean-up fds/pipes and temporary-directory

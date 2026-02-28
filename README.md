@@ -276,7 +276,7 @@ the script's behaviour:
   additional Intel CPU metrics
   - This feature is automatically disabled
     [when `intel_gpu_top` is not properly configured](#intel-n100), so unless
-    you explicitly want to disable these metrics there's not reason to set it to
+    you explicitly want to disable these metrics there's no reason to set it to
     `false`...
 - `SYSMON_FAN_SPEED` (default `false`) – enable fan speed measurement(s) using
   lm-sensors' `sensor`-command
