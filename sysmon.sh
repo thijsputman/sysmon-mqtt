@@ -548,12 +548,14 @@ while true; do
     for zone_path in /sys/class/thermal/thermal_zone*/type; do
       [[ -r $zone_path ]] || continue
       zone_type=$(< "$zone_path")
-      # When no better match is found, default to the first available zone
-      if [[ ! -v zone_temp ||
-        $zone_type =~ ^(cpu-thermal|x86_pkg_temp)$ ]]; then
+      # Default to the first available zone; then keep looking for a better
+      # match...
+      if
+        [[ ! -v zone_temp || $zone_type =~ ^(cpu-thermal|x86_pkg_temp)$ ]]
+      then
         zone_temp=${zone_path%/*}
         zone_temp=${zone_temp##*/}
-        break
+        [[ $zone_type =~ ^(cpu-thermal|x86_pkg_temp)$ ]] && break
       fi
     done
   fi
