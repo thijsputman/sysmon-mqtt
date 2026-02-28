@@ -32,8 +32,8 @@ Currently, the following metrics are provided:
 
 - `cpu_load` — the 1-minute load as a percentage of maximum nominal load (e.g.
   for a quad-core system, 100% represents a 1-minute load of 4.0)
-- `cpu_temp` — CPU temperature in degrees Celsius (read from
-  `/sys/class/thermal/thermal_zone0/temp` – omitted if not available)
+- `cpu_temp` — CPU temperature in degrees Celsius (auto-detected from
+  `/sys/class/thermal/thermal_zone*/temp` – omitted when none found)
 - `mem_used` — memory in use (_excluding_ buffers and caches) as a percentage of
   total available memory
 - `uptime` — uptime in seconds

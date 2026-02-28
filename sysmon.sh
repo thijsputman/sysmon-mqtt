@@ -418,7 +418,7 @@ if [[ ${SYSMON_HA_DISCOVER,,} == "true" ]]; then
   ha_discover 'CPU load' cpu_load mdi:chip '' %
   ha_discover 'Memory usage' mem_used mdi:memory '' %
 
-  if [[ -r /sys/class/thermal/thermal_zone0/temp ]]; then
+  if ls /sys/class/thermal/thermal_zone*/temp &> /dev/null; then
     ha_discover 'CPU temperature' cpu_temp '' temperature °C
   fi
 
@@ -537,11 +537,12 @@ while true; do
 
   # Attempt to find the most appropriate thermal-zone
   if [[ ! -v zone_temp ]]; then
-    zone_temp=thermal_zone0
     for zone_path in /sys/class/thermal/thermal_zone*/type; do
       [[ -r $zone_path ]] || continue
       zone_type=$(< "$zone_path")
-      if [[ $zone_type =~ ^(cpu-thermal|x86_pkg_temp)$ ]]; then
+      # When no better match is found, default to the first available zone
+      if [[ ! -v zone_temp ||
+        $zone_type =~ ^(cpu-thermal|x86_pkg_temp)$ ]]; then
         zone_temp=${zone_path%/*}
         zone_temp=${zone_temp##*/}
         break
@@ -549,7 +550,7 @@ while true; do
     done
   fi
 
-  if [[ -r /sys/class/thermal/${zone_temp}/temp ]]; then
+  if [[ -v zone_temp && -r /sys/class/thermal/${zone_temp}/temp ]]; then
     # shellcheck disable=SC2034 # Indirect reference only
     cpu_temp=$(gawk '{printf "%3.2f", $0/1000 }' < \
       "/sys/class/thermal/${zone_temp}/temp" || true)
