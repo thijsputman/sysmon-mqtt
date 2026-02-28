@@ -141,8 +141,7 @@ goodbye() {
   # Terminate all child-processes
   if [[ -n $(jobs -pr) ]]; then
     readarray -t pids < <(jobs -pr)
-    # shellcheck disable=SC2048,SC2086 # Intentional word splitting for kill arguments
-    kill -- ${pids[*]} &> /dev/null || true
+    kill -- "${pids[@]}" &> /dev/null || true
   fi
 
   # Clean-up fds/pipes and temporary-directory

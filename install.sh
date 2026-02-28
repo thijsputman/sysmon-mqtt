@@ -64,15 +64,11 @@ chmod +x "$sysmon_target"
 
 if $install; then
 
-  # Hoist all "SYSMON_*" environment variables into the service definition
+  # Hoist all safe "SYSMON_*" variables into the service definition
   sysmon_envs=()
   while IFS='=' read -r name value; do
-    if [[ $name =~ ^SYSMON_.*$ ]]; then
-      # Sanitize the value so it cannot break the systemd unit syntax.
-      # - Escape backslashes and double quotes.
-      # - Replace any newlines and carriage returns with spaces to keep a single line.
-      safe_value=$(printf '%s' "$value" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\r/ /g' | tr '\n' ' ')
-      sysmon_envs+=("Environment=\"$name=$safe_value\"")
+    if [[ $name =~ ^SYSMON_.*$ ]] && [[ ! $value =~ [\\\"$'\n\r'] ]]; then
+      sysmon_envs+=("Environment=\"$name=$value\"")
     fi
   done < <(env)
 
