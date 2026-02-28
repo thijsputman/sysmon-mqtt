@@ -72,7 +72,7 @@ are provided:
 These measurements probably work on many/most Intel-devices; they've only been
 tested to work on an Intel N100.
 
-The values reported are the average of several samples taking during the
+The values reported are the average of several samples taken during the
 preceding monitoring interval (filtering out intermittent noise). They do not
 represent the averages over the _entire_ interval though...
 
@@ -160,7 +160,7 @@ This behaviour is intended to allow "fixed" sensor-entities in Home Assistant
 The `apt`-metric is presented as a Home Assistant
 [Update-entity](https://www.home-assistant.io/integrations/update.mqtt/). For
 its "entity-picture" to show, copy the images from
-[`📂 /extras/wwww`](/extras/www/) into a folder named `📂 sysmon-mqtt` in your
+[`📂 /extras/www`](/extras/www/) into a folder named `📂 sysmon-mqtt` in your
 Home Assistant's local webroot, and set [`SYSMON_HA_BASE`](#usage) to your Home
 Assistant's base URL.
 
@@ -279,7 +279,7 @@ the script's behaviour:
     you explicitly want to disable these metrics there's no reason to set it to
     `false`...
 - `SYSMON_FAN_SPEED` (default `false`) – enable fan speed measurement(s) using
-  lm-sensors' `sensor`-command
+  lm-sensors' `sensors`-command
   - Currently only supported on the [LattePanda Mu](#lattepanda-mu), expect
     undefined behaviour when enabling this on other devices...
 

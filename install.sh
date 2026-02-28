@@ -76,7 +76,7 @@ if $install; then
   # Hoist all safe "SYSMON_*" variables into the service definition
   sysmon_envs=()
   while IFS='=' read -r name value; do
-    if [[ $name =~ ^SYSMON_.*$ ]] && [[ ! $value =~ [\\\"$'\n\r'] ]]; then
+    if [[ $name =~ ^SYSMON_.*$ ]] && [[ ! $value =~ [\\\"$'\n\r'%] ]]; then
       sysmon_envs+=("Environment=\"$name=$value\"")
     fi
   done < <(env)
