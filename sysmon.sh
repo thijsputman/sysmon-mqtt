@@ -31,7 +31,7 @@ fi
 
 # Simple daemon
 
-if [[ $1 == "--daemon" ]]; then
+if (($# > 0)) && [[ $1 == "--daemon" ]]; then
 
   touch "$SYSMON_DAEMON_LOG" || exit 1
 

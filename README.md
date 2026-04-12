@@ -437,7 +437,8 @@ Optionally, lists of `network-adapters` and `rtt-hosts` can also be passed in:
 
 ```shell
 export SYSMON_HA_BASE=http://homeassistant.local
-./install.sh mqtt-broker.local "Device Name" "eth0 wlan0" "router.local 8.8.8.8"
+sudo -E ./install.sh mqtt-broker.local "Device Name" "eth0 wlan0" \
+  "router.local 8.8.8.8"
 ```
 
 All environment-variables that start with `SYSMON_` have their current value
