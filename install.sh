@@ -97,9 +97,9 @@ if $install; then
 		User=${SUDO_USER:-$(whoami)}
 		ExecStart=/usr/bin/env bash "$sysmon_target" \\
 		  $mqtt_host \\
-		  "$device_name" \\
-		  $network_adapters \\
-		  $rtt_hosts
+		  "$device_name"${network_adapters:+ \\
+		  $network_adapters}${rtt_hosts:+ \\
+		  $rtt_hosts}
 		$(printf '%s\n' "${sysmon_envs[@]}")
 
 		[Install]
