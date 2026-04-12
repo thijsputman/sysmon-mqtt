@@ -15,6 +15,7 @@ Until December 2023, this script was part of my
 [`📄 HISTORY.md`](./HISTORY.md).
 
 - [Metrics](#metrics)
+  - [Device-specific metrics](#device-specific-metrics)
   - [Heartbeat](#heartbeat)
   - [Home Assistant discovery](#home-assistant-discovery)
   - [APT-check](#apt-check)
@@ -31,8 +32,8 @@ Currently, the following metrics are provided:
 
 - `cpu_load` — the 1-minute load as a percentage of maximum nominal load (e.g.
   for a quad-core system, 100% represents a 1-minute load of 4.0)
-- `cpu_temp` — CPU temperature in degrees Celsius (read from
-  `/sys/class/thermal/thermal_zone0/temp` – omitted if not available)
+- `cpu_temp` — CPU temperature in degrees Celsius (auto-detected from
+  `/sys/class/thermal/thermal_zone*/temp` – omitted when none found)
 - `mem_used` — memory in use (_excluding_ buffers and caches) as a percentage of
   total available memory
 - `uptime` — uptime in seconds
@@ -55,6 +56,75 @@ topic.
 Additionally, the version of the running `sysmon-mqtt`-script is provided in
 `sysmon/[device-name]/version`.
 
+### Device-specific metrics
+
+#### Intel N100
+
+On an Intel N100 where
+[`intel_gpu_top`](https://launchpad.net/ubuntu/+source/intel-gpu-tools) is
+available (and properly configured, see below) the following additional metrics
+are provided:
+
+- `gpu_load` – GPU-load as a percentage of maximum nominal load
+- `gpu_power` – GPU power-consumption in Watt
+- `package_power` – Package (CPU/GPU) power-consumption in Watt
+
+These measurements probably work on many/most Intel-devices; they've only been
+tested to work on an Intel N100.
+
+The values reported are the average of several samples taken during the
+preceding monitoring interval (filtering out intermittent noise). They do not
+represent the averages over the _entire_ interval though...
+
+**❗N.B.** For data to be reported, the user running `sysmon-mqtt` needs to be
+able to access `intel_gpu_top` _without_ root-privileges. Full instructions are
+available here:
+<https://github.com/luisbocanegra/plasma-intel-gpu-monitor#requirements>
+
+In a nutshell:
+
+```shell
+sudo setcap cap_perfmon=ep /usr/bin/intel_gpu_top
+sudo sysctl kernel.perf_event_paranoid=2
+echo "kernel.perf_event_paranoid = 2" |
+  sudo tee /etc/sysctl.d/99-perf-event-paranoid.conf > /dev/null
+```
+
+The `setcap` setting sticks, but might not survive an update of the
+`intel_gpu_top`-binary. The above GitHub-link provides an elegant solution to
+that issue as well.
+
+#### LattePanda Mu
+
+On a [LattePanda Mu](https://www.lattepanda.com/lattepanda-mu) (specifically,
+its DFR1142 Lite Carrier Board with the IT8613E-chip), the status of the fan
+connected to the carrier board's fan-header can be reported:
+
+- `fan_speed` – Fan speed in RPM
+
+The current implementation is crude: It will report the highest fan RPM in the
+output of lm-sensors' `sensors`-command for the `it8613`-chip. If multiple fans
+are connected (non-trivial on the carrier board; most likely possible on other
+boards), the measurement randomly oscillates between multiple fans...
+
+Thus, to enable the implementation, [`SYSMON_FAN_SPEED`](#usage) needs to be
+explicitly set to `true` (and will only remain `true` if an `it8613`-chip is
+present). Furthermore, a custom kernel driver needs to be compiled:
+
+```shell
+sudo apt install \
+  dkms \
+  lm-sensors
+git clone git@github.com:frankcrawford/it87.git && cd it87
+make clean
+sudo make dkms
+dkms status
+echo it87 | sudo tee /etc/modules-load.d/it87.conf > /dev/null
+sensors
+```
+
+More details on the kernel-driver: <https://github.com/frankcrawford/it87>
+
 ### Heartbeat
 
 A persistent `sysmon/[device-name]/connected` topic is provided as an indication
@@ -74,6 +144,9 @@ second iteration onwards...
 
 ### Home Assistant discovery
 
+**❗N.B.** The current version of the script publishes MQTT-payloads compatible
+with Home **Assistant 2025.10** and later.
+
 By default, the script publishes
 [Home Assistant discovery](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery)
 messages to the `homeassistant/sensors/sysmon` topic.
@@ -87,8 +160,9 @@ This behaviour is intended to allow "fixed" sensor-entities in Home Assistant
 The `apt`-metric is presented as a Home Assistant
 [Update-entity](https://www.home-assistant.io/integrations/update.mqtt/). For
 its "entity-picture" to show, copy the images from
-[`📂 /extras/wwww`](/extras/www/) into a folder named `📂 sysmon-mqtt` in your
-Home Assistant's local webroot.
+[`📂 /extras/www`](/extras/www/) into a folder named `📂 sysmon-mqtt` in your
+Home Assistant's local webroot, and set [`SYSMON_HA_BASE`](#usage) to your Home
+Assistant's base URL.
 
 To unregister (a set of) metrics from Home Assistant, simply remove the device
 from the MQTT integration (under _Settings_).
@@ -178,10 +252,6 @@ the script's behaviour:
   to Home Assistant discovery topic
 - `SYSMON_HA_TOPIC` (default: `homeassistant`) — base for the Home Assistant
   discovery topic
-- `SYSMON_HA_VERSION` (default: `202308`) — specify Home Assistant version
-  compatibility (as `YYYYMM`); based on this some behaviours are modified:
-  - `>= 202308` do _not_ prepend device name to sensor name
-    ([home-assistant/core#95159](https://github.com/home-assistant/core/pull/95159))
 - `SYSMON_INTERVAL` (default: `30`) — set the interval (in seconds) at which
   metrics are reported
   - In principle, the interval can lowered all the way down to **zero** for
@@ -189,6 +259,9 @@ the script's behaviour:
   - When `rtt-hosts` are provided, the script automatically enforces a minimum
     reporting interval to ensure the ping-command(s) have sufficient time to
     complete
+- `SYSMON_HA_BASE` (default: `""`) – specify Home Assistant's base URL (e.g.,
+  `http://homeassistant.local`) to be used as the base for local image resources
+  (see [Home Assistant discovery](#home-assistant-discovery))
 - `SYSMON_APT` (default: `true`) — set to `false` to disable reporting
   APT-related metrics (`apt` and `reboot_required`)
   - Automatically disabled when no `apt`-binary is present, _or_ when running
@@ -199,6 +272,16 @@ the script's behaviour:
   iteration over which to average the round-trip time
 - `SYSMON_DAEMON_LOG` (default `~/sysmon-mqtt.log`) — file to redirect all
   output to when running in [daemon-mode](#daemon-mode)
+- `SYSMON_INTEL_GPU` (default `true`) – use `intel_gpu_top` to report on
+  additional Intel CPU metrics
+  - This feature is automatically disabled
+    [when `intel_gpu_top` is not properly configured](#intel-n100), so unless
+    you explicitly want to disable these metrics there's no reason to set it to
+    `false`...
+- `SYSMON_FAN_SPEED` (default `false`) – enable fan speed measurement(s) using
+  lm-sensors' `sensors`-command
+  - Currently only supported on the [LattePanda Mu](#lattepanda-mu), expect
+    undefined behaviour when enabling this on other devices...
 
 Echo the `sysmon-mqtt` version and exit:
 
@@ -311,6 +394,10 @@ StartLimitBurst=3
 
 [Service]
 Type=simple
+# Required for the `intel_gpu_top`-implementation – as we're running a shell-
+# script in the first place, it probably doesn't hurt to toggle this off (which
+# restores the shell's "regular" behaviour)
+IgnoreSIGPIPE=false
 Restart=on-failure
 RestartSec=30
 # Update the below match your environment
@@ -318,7 +405,7 @@ User=[user]
 ExecStart=/usr/bin/env bash /home/<user>/sysmon.sh \
   mqtt-broker "Device Name" [network-adapters] [rtt-hosts]
 # Optional: Provide additional environment variables
-Environment=""
+Environment="SYSMON_HA_BASE=http://homeassistant.local"
 
 [Install]
 WantedBy=multi-user.target
@@ -345,24 +432,40 @@ distributions) is provided: [`📄 install.sh`](./install.sh). Once installed,
 running the script again will pull the latest version of `📄 sysmon.sh` from
 GitHub.
 
-The script requires `mqtt-broker` and `"Device Name"` to be provided.
-Optionally, `network-adapters` and `rtt-hosts` can also be passed in:
+The script requires an MQTT-broker address and "Device Name" to be provided.
+Optionally, lists of `network-adapters` and `rtt-hosts` can also be passed in:
 
 ```shell
-./install.sh mqtt-broker "Device Name" "eth0 wlan0" "router.local 8.8.8.8"
+export SYSMON_HA_BASE=http://homeassistant.local
+sudo -E ./install.sh mqtt-broker.local "Device Name" "eth0 wlan0" \
+  "router.local 8.8.8.8"
 ```
 
-Alternatively, if the service is already installed, the installer can be called
-without arguments to pull the latest version of the script:
+All environment-variables that start with `SYSMON_` have their current value
+automatically included in the service-definition.
+
+If the service is already installed, the installer can be called without
+arguments to pull the latest version of the script:
 
 ```shell
+./install.sh
+```
+
+By default, the setup-script installs from the `main`-branch (i.e., it takes the
+[most recent release](https://github.com/thijsputman/sysmon-mqtt/releases)). To
+install another version, set `SYSMON_INSTALL_COMMIT` to either a (partial)
+commit-hash, or a branch name prior to running the installer:
+
+```shell
+export SYSMON_INSTALL_COMMIT=7a38346
 ./install.sh
 ```
 
 For the very brave, the script can be run from GitHub directly:
 
 ```shell
+export SYSMON_HA_BASE=http://homeassistant.local
 curl -fsSL https://github.com/thijsputman/sysmon-mqtt/raw/main/install.sh |
-sudo -E bash -s - \
-mqtt-broker "Device Name" "eth0 wlan0" "8.8.8.8 google.com"
+  sudo -E bash -s - \
+    mqtt-broker.local "Device Name" "eth0 wlan0" "8.8.8.8 google.com"
 ```
