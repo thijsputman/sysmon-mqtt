@@ -11,7 +11,7 @@ install=false
 # If no service is present, always start the install-routine. Otherwise, only
 # do so if at least _one_ argument is passed into this script.
 
-if [[ ! -e /etc/systemd/system/sysmon-mqtt.service || -v 1 ]]; then
+if [[ ! -e /etc/systemd/system/sysmon-mqtt.service ]] || (($# > 0)); then
 
   install=true
 

@@ -482,7 +482,11 @@ _join() {
 }
 
 _optional_field() {
-  [[ -v 1 && -n ${!1} ]] && echo "\"$1\": \"${!1}\","
+  if (($# > 0)); then
+    local name=$1
+    local -n value=$name
+    [[ -n ${value-} ]] && echo "\"$name\": \"$value\","
+  fi
 }
 
 _readfd() {
