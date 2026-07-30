@@ -65,7 +65,6 @@ mkdir -p "$HOME/.local/bin"
 sysmon_target="$HOME/.local/bin/sysmon-mqtt"
 
 wget -O "$sysmon_target" "$(tr -d ' ' <<< "$sysmon_url")"
-chown "$(whoami):" "$sysmon_target"
 chmod +x "$sysmon_target"
 
 if $install; then

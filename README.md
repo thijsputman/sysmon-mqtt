@@ -71,8 +71,8 @@ The currently supported chips are:
 - `pwmfan-*` – Amongst others, the Raspberry Pi 5's onboard fan header
 
 To enable the implementation, [`SYSMON_FAN_SPEED`](#usage) needs to be
-explicitly set to `true` (and will only remain `true` only if a supported chip
-is present).
+explicitly set to `true` (and will only remain `true` if a supported chip is
+present).
 
 ### Device-specific metrics
 
