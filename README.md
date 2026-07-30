@@ -445,8 +445,8 @@ Optionally, lists of `network-adapters` and `rtt-hosts` can also be passed in:
 
 ```shell
 export SYSMON_HA_BASE=http://homeassistant.local
-sudo -E ./install.sh mqtt-broker.local "Device Name" "eth0 wlan0" \
-  "router.local 8.8.8.8"
+./install.sh  \
+  mqtt-broker.local "Device Name" "eth0 wlan0" "router.local 8.8.8.8"
 ```
 
 All environment-variables that start with `SYSMON_` have their current value
@@ -474,6 +474,6 @@ For the very brave, the script can be run from GitHub directly:
 ```shell
 export SYSMON_HA_BASE=http://homeassistant.local
 curl -fsSL https://github.com/thijsputman/sysmon-mqtt/raw/main/install.sh |
-  sudo -E bash -s - \
+  bash -s -- \
     mqtt-broker.local "Device Name" "eth0 wlan0" "8.8.8.8 google.com"
 ```

@@ -8,6 +8,9 @@ export DEBIAN_FRONTEND=noninteractive
 
 install=false
 
+# Prime sudo
+sudo -v
+
 # If no service is present, always start the install-routine. Otherwise, only
 # do so if at least _one_ argument is passed into this script.
 
@@ -42,15 +45,15 @@ sysmon_url="https://raw.githubusercontent.com/thijsputman/sysmon-mqtt/\
   ${SYSMON_INSTALL_COMMIT,,}/sysmon.sh"
 
 if [[ -e /etc/systemd/system/sysmon-mqtt.service ]]; then
-  systemctl stop sysmon-mqtt
+  sudo systemctl stop sysmon-mqtt
   if $install; then
-    systemctl disable sysmon-mqtt
-    rm /etc/systemd/system/sysmon-mqtt.service
+    sudo systemctl disable sysmon-mqtt
+    sudo rm /etc/systemd/system/sysmon-mqtt.service
   fi
 # Assumes dependencies are only relevant on first ever install...
 else
-  apt update
-  apt install -y \
+  sudo apt update
+  sudo apt install -y \
     bash \
     gawk \
     iw \
@@ -62,7 +65,7 @@ mkdir -p "$HOME/.local/bin"
 sysmon_target="$HOME/.local/bin/sysmon-mqtt"
 
 wget -O "$sysmon_target" "$(tr -d ' ' <<< "$sysmon_url")"
-chown "${SUDO_USER:-$(whoami)}:" "$sysmon_target"
+chown "$(whoami):" "$sysmon_target"
 chmod +x "$sysmon_target"
 
 if $install; then
@@ -81,7 +84,7 @@ if $install; then
     fi
   done < <(env)
 
-  tee /etc/systemd/system/sysmon-mqtt.service <<- EOF > /dev/null
+  sudo tee /etc/systemd/system/sysmon-mqtt.service <<- EOF > /dev/null
 		[Unit]
 		Description=Simple system monitoring over MQTT
 		After=network-online.target
@@ -105,10 +108,10 @@ if $install; then
 		[Install]
 		WantedBy=multi-user.target
 	EOF
-  # N.B. heredoc should be indented with tabs...
+  #❗N.B. heredoc should be indented with tabs...
 
-  systemctl daemon-reload
-  systemctl enable sysmon-mqtt
+  sudo systemctl daemon-reload
+  sudo systemctl enable sysmon-mqtt
 
 fi
 
@@ -117,5 +120,9 @@ if [[ ! -e /etc/systemd/system/sysmon-mqtt.service ]]; then
   exit 1
 fi
 
-systemctl start sysmon-mqtt
-exit $?
+sudo systemctl start sysmon-mqtt
+rc=$?
+
+sudo -k
+
+exit $rc
