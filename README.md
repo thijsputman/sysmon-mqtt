@@ -15,6 +15,7 @@ Until December 2023, this script was part of my
 [`📄 HISTORY.md`](./HISTORY.md).
 
 - [Metrics](#metrics)
+  - [Fan speed](#fan-speed)
   - [Device-specific metrics](#device-specific-metrics)
   - [Heartbeat](#heartbeat)
   - [Home Assistant discovery](#home-assistant-discovery)
@@ -36,6 +37,7 @@ Currently, the following metrics are provided:
   `/sys/class/thermal/thermal_zone*/temp` – omitted when none found)
 - `mem_used` — memory in use (_excluding_ buffers and caches) as a percentage of
   total available memory
+- `fan_speed` – Fan speed in RPM ([see below](#fan-speed) for caveats)
 - `uptime` — uptime in seconds
 - `status` – overall status of the system (systemd-only;
   [as reported by `systemctl is-system-running`](https://www.freedesktop.org/software/systemd/man/systemctl.html#is-system-running))
@@ -55,6 +57,22 @@ topic.
 
 Additionally, the version of the running `sysmon-mqtt`-script is provided in
 `sysmon/[device-name]/version`.
+
+### Fan speed
+
+The current fan speed implementation is crude: It will report the highest fan
+RPM in the output of lm-sensors' `sensors`-command for any of the supported
+chips. If multiple fans are connected (a not unrealistic assumption), the
+measurement randomly oscillates between multiple fans...
+
+The currently supported chips are:
+
+- `it8613-*` – [IT8613E-chip on DFR1142 Lite Carrier Board](#lattepanda-mu)
+- `pwmfan-*` – Amongst others, the Raspberry Pi 5's onboard fan header
+
+To enable the implementation, [`SYSMON_FAN_SPEED`](#usage) needs to be
+explicitly set to `true` (and will only remain `true` only if a supported chip
+is present).
 
 ### Device-specific metrics
 
@@ -96,20 +114,10 @@ that issue as well.
 
 #### LattePanda Mu
 
-On a [LattePanda Mu](https://www.lattepanda.com/lattepanda-mu) (specifically,
-its DFR1142 Lite Carrier Board with the IT8613E-chip), the status of the fan
-connected to the carrier board's fan-header can be reported:
-
-- `fan_speed` – Fan speed in RPM
-
-The current implementation is crude: It will report the highest fan RPM in the
-output of lm-sensors' `sensors`-command for the `it8613`-chip. If multiple fans
-are connected (non-trivial on the carrier board; most likely possible on other
-boards), the measurement randomly oscillates between multiple fans...
-
-Thus, to enable the implementation, [`SYSMON_FAN_SPEED`](#usage) needs to be
-explicitly set to `true` (and will only remain `true` if an `it8613`-chip is
-present). Furthermore, a custom kernel driver needs to be compiled:
+To report the status of the fan connected to the fan-header on a
+[LattePanda Mu](https://www.lattepanda.com/lattepanda-mu) (more specifically,
+its DFR1142 Lite Carrier Board with the IT8613E-chip), a custom kernel driver
+needs to be compiled:
 
 ```shell
 sudo apt install \
