@@ -64,11 +64,6 @@ if (($# > 0)) && [[ $1 == "--daemon" ]]; then
 
 fi
 
-# Compute number of ticks per hour; additionally, forces $SYSMON_INTERVAL to
-# base10 — exits in case of an invalid value for the interval
-
-hourly_ticks=$((3600 / 10#$SYSMON_INTERVAL))
-
 # APT-related metrics make no sense when running inside a Docker-container or
 # when APT is not present on the system
 
@@ -147,8 +142,8 @@ if [[ ${SYSMON_INTEL_GPU,,} == "true" ]]; then
   fi
 fi
 
-# Similar for Raspberry Pi 5 power consumption, but with a simple 6-second limit
-# to ensure at least one measurement gets taken
+# Idem for the Raspberry Pi 5 power consumption. A simple 6-second minimum
+# suffices to ensure at least one measurement is taken.
 
 if [[ ${SYSMON_RPI5_POWER,,} == "true" ]]; then
   minimum_interval=6
@@ -157,6 +152,11 @@ if [[ ${SYSMON_RPI5_POWER,,} == "true" ]]; then
     SYSMON_INTERVAL=$minimum_interval
   fi
 fi
+
+# Compute number of ticks per hour; additionally, forces $SYSMON_INTERVAL to
+# base10 — exits in case of an invalid value for the interval
+
+hourly_ticks=$((3600 / 10#$SYSMON_INTERVAL))
 
 # Exit-trap handler
 
@@ -803,31 +803,26 @@ while true; do
       for ((i = 0; i < $((10#$SYSMON_INTERVAL - 5)); i = i + 5)); do
 
         # Current-readings are leading; volt-readings without a matching current
-        # (e.g., `EXT5V_V`, `BATT_V`) are dropped. Furthermore, assumes the
-        # readings are sorted in matching order (either current and volt matched
-        # up, or two separate lists in the same order).
+        # (e.g., `EXT5V_V`, `BATT_V`) are dropped
         sample_mw=$(
           vcgencmd pmic_read_adc 2> /dev/null | gawk '
-            BEGIN {
-              readings=0
-            }
             {
+              rail = $1
               if (match($0, /current(\([0-9]+\))?=([0-9.]+)A/, c)) {
-                readings = readings + 1
-                currents[readings] = c[2]
+                sub(/_A$/, "", rail)
+                currents[rail] = c[2]
+              } else if (match($0, /volt(\([0-9]+\))?=([0-9.]+)V/, v)) {
+                sub(/_V$/, "", rail)
+                volts[rail] = v[2]
               }
-              if (match($0, /volt(\([0-9]+\))?=([0-9.]+)V/, v)) {
-                n_volt = n_volt + 1
-                volts[n_volt] = v[2]
-              }
-
             }
             END {
               sum_w = 0
-              for (i = 1; i <= readings; i = i + 1) {
-                sum_w = sum_w + (volts[i] * currents[i])
+              for (rail in currents) {
+                if (rail in volts) {
+                  sum_w = sum_w + (volts[rail] * currents[rail])
+                }
               }
-
               if (sum_w > 0) {
                 printf "%.0f\n", sum_w * 1000
               }
