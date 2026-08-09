@@ -24,6 +24,7 @@ fi
 : "${SYSMON_IN_DOCKER:=false}"
 : "${SYSMON_INTEL_GPU:=true}"
 : "${SYSMON_FAN_SPEED:=false}"
+: "${SYSMON_RPI5_POWER:=true}"
 : "${SYSMON_APT:=true}"
 : "${SYSMON_APT_CHECK:=}"
 : "${SYSMON_RTT_COUNT:=4}"
@@ -79,8 +80,7 @@ fi
 # non-functional due to various permission issues)
 
 if
-  [[ ${SYSMON_INTEL_GPU,,} == "true" ]] &&
-    command -v intel_gpu_top &> /dev/null
+  [[ ${SYSMON_INTEL_GPU,,} == "true" ]] && command -v intel_gpu_top &> /dev/null
 then
   rc=0
   timeout -s KILL --foreground 5s \
@@ -92,6 +92,16 @@ then
   fi
 else
   SYSMON_INTEL_GPU=false
+fi
+
+# Without (access to) `vcgencmd`, disable Raspberry Pi5 power consumption
+
+if
+  [[ ${SYSMON_RPI5_POWER,,} == "true" ]] && (
+    ! command -v vcgencmd &> /dev/null || ! vcgencmd pmic_read_adc &> /dev/null
+  )
+then
+  SYSMON_RPI5_POWER=false
 fi
 
 # The fan-speed implementation is crude, disable it unless an explicitly
@@ -137,6 +147,17 @@ if [[ ${SYSMON_INTEL_GPU,,} == "true" ]]; then
   fi
 fi
 
+# Similar for Raspberry Pi 5 power consumption, but with a simple 6-second limit
+# to ensure at least one measurement gets taken
+
+if [[ ${SYSMON_RPI5_POWER,,} == "true" ]]; then
+  minimum_interval=6
+  if ((10#$SYSMON_INTERVAL < minimum_interval)); then
+    echo " \-> Increased SYSMON_INTERVAL to $minimum_interval"
+    SYSMON_INTERVAL=$minimum_interval
+  fi
+fi
+
 # Exit-trap handler
 
 goodbye() {
@@ -158,6 +179,9 @@ goodbye() {
   fi
   if { : >&4; } 2> /dev/null; then
     exec 4>&-
+  fi
+  if { : >&5; } 2> /dev/null; then
+    exec 5>&-
   fi
   if [[ -v temp_dir && -d $temp_dir ]]; then
     rm -rf "$temp_dir"
@@ -444,6 +468,10 @@ if [[ ${SYSMON_HA_DISCOVER,,} == "true" ]]; then
     ha_discover 'Package power' pkg_power '' power W
   fi
 
+  if [[ ${SYSMON_RPI5_POWER,,} == "true" ]]; then
+    ha_discover 'RPi5 power' rpi5_power '' power W
+  fi
+
   for eth_adapter in "${eth_adapters[@]}"; do
 
     ha_discover "Bandwidth in (${eth_adapter})" "bandwidth/${eth_adapter}/rx" \
@@ -533,6 +561,15 @@ if [[ ${SYSMON_INTEL_GPU,,} == "true" ]]; then
 fi
 
 payload_intel_gpu=""
+
+# Raspberry Pi 5 power consumption ("anonymous" pipe; fd 5)
+if [[ ${SYSMON_RPI5_POWER,,} == "true" ]]; then
+  rpi5_power_result="$temp_dir/rpi5_power"
+  mkfifo "$rpi5_power_result" && exec 5<> "$rpi5_power_result"
+  unset -v rpi5_power_result
+fi
+
+rpi5_power=""
 
 # ZFS ARC — minimum size
 if [[ -f /proc/spl/kstat/zfs/arcstats ]]; then
@@ -752,6 +789,76 @@ while true; do
 
   fi
 
+  # Raspberry Pi 5 power consumption
+
+  if { : >&5; } 2> /dev/null; then
+
+    # shellcheck disable=SC2034 # Indirect reference only
+    rpi5_power=$(_readfd 5)
+
+    (
+      sum_mw=0
+      samples=0
+
+      for ((i = 0; i < $((10#$SYSMON_INTERVAL - 5)); i = i + 5)); do
+
+        # Current-readings are leading; volt-readings without a matching current
+        # (e.g., `EXT5V_V`, `BATT_V`) are dropped. Furthermore, assumes the
+        # readings are sorted in matching order (either current and volt matched
+        # up, or two separate lists in the same order).
+        sample_mw=$(
+          vcgencmd pmic_read_adc 2> /dev/null | gawk '
+            BEGIN {
+              readings=0
+            }
+            {
+              if (match($0, /current(\([0-9]+\))?=([0-9.]+)A/, c)) {
+                readings = readings + 1
+                currents[readings] = c[2]
+              }
+              if (match($0, /volt(\([0-9]+\))?=([0-9.]+)V/, v)) {
+                n_volt = n_volt + 1
+                volts[n_volt] = v[2]
+              }
+
+            }
+            END {
+              sum_w = 0
+              for (i = 1; i <= readings; i = i + 1) {
+                sum_w = sum_w + (volts[i] * currents[i])
+              }
+
+              if (sum_w > 0) {
+                printf "%.0f\n", sum_w * 1000
+              }
+            }
+          '
+        )
+
+        if [[ -n $sample_mw ]]; then
+          ((sum_mw += sample_mw))
+          ((samples += 1))
+        fi
+
+        sleep 5
+
+      done
+
+      # Linear correction factors courtesy of:
+      #   <https://github.com/jfikar/RPi5-power>
+      if ((samples > 0)); then
+        printf '%s %s\n' "$sum_mw" "$samples" | gawk '
+          {
+            power = (($1 / 1000) / $2) * 1.1451 + 0.5879
+            printf "%.2f\n", power
+          }' >&5
+      fi
+
+      printf '\0' >&5
+    ) &
+
+  fi
+
   # APT & reboot-required
 
   payload_apt=()
@@ -821,6 +928,7 @@ while true; do
       "mem_used": "$mem_used",
       $(_optional_field cpu_temp)
       $(_optional_field fan_speed)
+      $(_optional_field rpi5_power)
       $(_optional_field status)
       $payload_intel_gpu
       "bandwidth": {
