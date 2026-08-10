@@ -9,6 +9,15 @@ export DEBIAN_FRONTEND=noninteractive
 install=false
 
 # Prime sudo
+if ! command -v sudo &> /dev/null; then
+  # When not available, replace with no-op
+  sudo() {
+    if [[ ${1-} == -* ]]; then
+      return 0
+    fi
+    "$@"
+  }
+fi
 sudo -v
 
 # If no service is present, always start the install-routine. Otherwise, only
@@ -61,8 +70,13 @@ else
     mosquitto-clients
 fi
 
-mkdir -p "$HOME/.local/bin"
-sysmon_target="$HOME/.local/bin/sysmon-mqtt"
+local_bin="$HOME/.local/bin"
+if ((EUID == 0)); then
+  local_bin="/usr/local/bin"
+fi
+
+mkdir -p "$local_bin"
+sysmon_target="$local_bin/sysmon-mqtt"
 
 wget -O "$sysmon_target" "$(tr -d ' ' <<< "$sysmon_url")"
 chmod +x "$sysmon_target"

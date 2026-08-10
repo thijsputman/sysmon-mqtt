@@ -449,6 +449,10 @@ export SYSMON_HA_BASE=http://homeassistant.local
   mqtt-broker.local "Device Name" "eth0 wlan0" "router.local 8.8.8.8"
 ```
 
+**❗N.B.** The installer will try to invoke `sudo` if/when required. If `sudo`
+is not present on the system, you'll need to manually ensure the script runs
+with root-privileges...
+
 All environment-variables that start with `SYSMON_` have their current value
 automatically included in the service-definition.
 
