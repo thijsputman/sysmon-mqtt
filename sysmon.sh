@@ -3,7 +3,7 @@
 set -euo pipefail
 
 : "${SYSMON_INSTALL_COMMIT:=main}"
-SYSMON_MQTT_VERSION='1.4.0'
+SYSMON_MQTT_VERSION='1.4.1-dev'
 
 if [[ -n $SYSMON_INSTALL_COMMIT && ${SYSMON_INSTALL_COMMIT,,} != main ]]; then
   SYSMON_MQTT_VERSION+="-${SYSMON_INSTALL_COMMIT,,}"
@@ -98,7 +98,11 @@ fi
 # supported chip is detected.
 if [[ ${SYSMON_FAN_SPEED,,} == "true" ]]; then
   SYSMON_FAN_SPEED="false"
-  if command -v sensors &> /dev/null && sensors it8613-\* &> /dev/null; then
+  sensors_fans=(it8613-\* pwmfan-\*)
+  if
+    command -v sensors &> /dev/null &&
+      sensors "${sensors_fans[@]}" &> /dev/null
+  then
     SYSMON_FAN_SPEED="true"
   fi
 fi
@@ -575,8 +579,8 @@ while true; do
     command -v sensors &> /dev/null; then
     # shellcheck disable=SC2034 # Indirect reference only
     fan_speed=$(
-      sensors it8613-\* 2> /dev/null |
-        gawk '/fan[0-9]+/ {if ($2+0 > max) max = $2} END {print max}' || true
+      sensors "${sensors_fans[@]}" 2> /dev/null |
+        gawk '/fan[0-9]+/ {if ($2+0 >= max) max = $2+0} END {print max}' || true
     )
   fi
 
