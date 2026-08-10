@@ -2,8 +2,6 @@
 
 set -euo pipefail
 
-export DEBIAN_FRONTEND=noninteractive
-
 : "${SYSMON_INSTALL_COMMIT:=main}"
 
 install=false
@@ -61,8 +59,9 @@ if [[ -e /etc/systemd/system/sysmon-mqtt.service ]]; then
   fi
 # Assumes dependencies are only relevant on first ever install...
 else
-  sudo apt update
-  sudo apt install -y \
+  sudo DEBIAN_FRONTEND=noninteractive apt update
+  sudo DEBIAN_FRONTEND=noninteractive apt install \
+    --no-install-recommends -y \
     bash \
     gawk \
     iw \

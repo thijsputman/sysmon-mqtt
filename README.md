@@ -288,8 +288,8 @@ the script's behaviour:
     `false`...
 - `SYSMON_FAN_SPEED` (default `false`) – enable fan speed measurement(s) using
   lm-sensors' `sensors`-command
-  - Currently only supported on the [LattePanda Mu](#lattepanda-mu), expect
-    undefined behaviour when enabling this on other devices...
+  - Currently only a handful of sensor chips are supported, see the
+    [fan speed section](#fan-speed) for more details
 
 Echo the `sysmon-mqtt` version and exit:
 
