@@ -21,7 +21,6 @@ fi
 : "${SYSMON_HA_TOPIC:=homeassistant}"
 : "${SYSMON_HA_BASE:=}"
 : "${SYSMON_INTERVAL:=30}"
-: "${SYSMON_IN_DOCKER:=false}"
 : "${SYSMON_INTEL_GPU:=true}"
 : "${SYSMON_FAN_SPEED:=false}"
 : "${SYSMON_RPI5_POWER:=true}"
@@ -64,10 +63,9 @@ if (($# > 0)) && [[ $1 == "--daemon" ]]; then
 
 fi
 
-# APT-related metrics make no sense when running inside a Docker-container or
-# when APT is not present on the system
+# APT-related metrics make no sense when APT is not present on the system
 
-if [[ ${SYSMON_IN_DOCKER,,} == "true" ]] || ! command -v apt &> /dev/null; then
+if ! command -v apt &> /dev/null; then
   SYSMON_APT=false
 fi
 

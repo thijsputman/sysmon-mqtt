@@ -37,10 +37,6 @@ if ! command -v shellcheck; then
   version=v0.9.0 "${GITHUB_WORKSPACE}/.github/scripts/bins.d/shellcheck"
 fi
 
-if ! command -v hadolint; then
-  version=v2.12.0 "${GITHUB_WORKSPACE}/.github/scripts/bins.d/hadolint"
-fi
-
 if ! command -v tdg; then
   version=v0.0.2 "${GITHUB_WORKSPACE}/.github/scripts/bins.d/tdg"
 fi

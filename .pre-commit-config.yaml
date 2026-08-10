@@ -52,11 +52,6 @@ repos:
         entry: shfmt -l -d
         language: system
         types: [shell]
-      - id: hadolint
-        name: hadolint
-        entry: hadolint
-        language: system
-        types: [dockerfile]
       - id: tdg
         name: TODO get
         entry: .github/scripts/tdg-pre-commit.sh

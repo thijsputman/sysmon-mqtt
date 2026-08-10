@@ -1,5 +1,4 @@
 name: Lint codebase
-
 "on":
   push:
     branches: [main, develop]

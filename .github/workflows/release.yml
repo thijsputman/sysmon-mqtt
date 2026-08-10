@@ -1,5 +1,4 @@
 name: Release
-
 "on":
   release:
     types: [published]
@@ -8,21 +7,12 @@ jobs:
     uses: ./.github/workflows/linter.yml
     permissions:
       contents: read
-  build_push:
-    uses: ./.github/workflows/docker.yml
-    with:
-      release: true
-    secrets: inherit
-    permissions:
-      contents: read
-      packages: write
-    needs: lint
   release:
     name: Publish release
     runs-on: ubuntu-22.04
     permissions:
       contents: write
-    needs: build_push
+    needs: [lint]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
