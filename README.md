@@ -133,6 +133,28 @@ sensors
 
 More details on the kernel-driver: <https://github.com/frankcrawford/it87>
 
+#### Raspberry Pi 5
+
+On a Raspberry Pi 5, the output of `vcgencmd pmic_read_ad` can be used to
+approximate power consumption. The idea, and linear approximation values used
+are courtesy of <https://github.com/jfikar/RPi5-power>:
+
+- `rpi5_power` – Approximate Raspberry Pi 5's power consumption in Watt
+
+For the metric to be reported, ensure the user running `sysmon-mqtt` has access
+to the `vcio`-device (generally achieved by adding that user to the
+`video`-group):
+
+```bash
+sudo usermod -aG video $USER
+# Furthermore, ensure the device's group is "video"
+ls -la /dev/vcio
+# If that's not the case, add the below udev-rule
+echo 'KERNEL=="vcio", GROUP="video", MODE="0660"' |
+  sudo tee /etc/udev/rules.d/90-rpi-vcio.rules
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
 ### Heartbeat
 
 A persistent `sysmon/[device-name]/connected` topic is provided as an indication
@@ -282,14 +304,20 @@ the script's behaviour:
   output to when running in [daemon-mode](#daemon-mode)
 - `SYSMON_INTEL_GPU` (default `true`) – use `intel_gpu_top` to report on
   additional Intel CPU metrics
-  - This feature is automatically disabled
-    [when `intel_gpu_top` is not properly configured](#intel-n100), so unless
-    you explicitly want to disable these metrics there's no reason to set it to
+  - This feature is automatically disabled when
+    [`intel_gpu_top` is not properly configured](#intel-n100), so unless you
+    explicitly want to disable these metrics there's no reason to set it to
     `false`...
 - `SYSMON_FAN_SPEED` (default `false`) – enable fan speed measurement(s) using
   lm-sensors' `sensors`-command
   - Currently only a handful of sensor chips are supported, see the
     [fan speed section](#fan-speed) for more details
+- `SYSMON_RPI5_POWER` (default `true`) – enable (approximation of) Raspberry Pi
+  5 power consumption
+  - This feature is automatically disabled when
+    [the required `vcgencmd pmic_read_ad` command](#raspberry-pi-5) is not
+    available, so unless you explicitly want to disable this metric there's no
+    reason to set it to `false`..
 
 Echo the `sysmon-mqtt` version and exit:
 
