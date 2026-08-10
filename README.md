@@ -15,6 +15,7 @@ Until December 2023, this script was part of my
 [`📄 HISTORY.md`](./HISTORY.md).
 
 - [Metrics](#metrics)
+  - [Fan speed](#fan-speed)
   - [Device-specific metrics](#device-specific-metrics)
   - [Heartbeat](#heartbeat)
   - [Home Assistant discovery](#home-assistant-discovery)
@@ -36,6 +37,7 @@ Currently, the following metrics are provided:
   `/sys/class/thermal/thermal_zone*/temp` – omitted when none found)
 - `mem_used` — memory in use (_excluding_ buffers and caches) as a percentage of
   total available memory
+- `fan_speed` – Fan speed in RPM ([see below](#fan-speed) for caveats)
 - `uptime` — uptime in seconds
 - `status` – overall status of the system (systemd-only;
   [as reported by `systemctl is-system-running`](https://www.freedesktop.org/software/systemd/man/systemctl.html#is-system-running))
@@ -55,6 +57,22 @@ topic.
 
 Additionally, the version of the running `sysmon-mqtt`-script is provided in
 `sysmon/[device-name]/version`.
+
+### Fan speed
+
+The current fan speed implementation is crude: It will report the highest fan
+RPM in the output of lm-sensors' `sensors`-command for any of the supported
+chips. If multiple fans are connected (a not unrealistic assumption), the
+measurement randomly oscillates between multiple fans...
+
+The currently supported chips are:
+
+- `it8613-*` – [IT8613E-chip on DFR1142 Lite Carrier Board](#lattepanda-mu)
+- `pwmfan-*` – Amongst others, the Raspberry Pi 5's onboard fan header
+
+To enable the implementation, [`SYSMON_FAN_SPEED`](#usage) needs to be
+explicitly set to `true` (and will only remain `true` if a supported chip is
+present).
 
 ### Device-specific metrics
 
@@ -96,20 +114,10 @@ that issue as well.
 
 #### LattePanda Mu
 
-On a [LattePanda Mu](https://www.lattepanda.com/lattepanda-mu) (specifically,
-its DFR1142 Lite Carrier Board with the IT8613E-chip), the status of the fan
-connected to the carrier board's fan-header can be reported:
-
-- `fan_speed` – Fan speed in RPM
-
-The current implementation is crude: It will report the highest fan RPM in the
-output of lm-sensors' `sensors`-command for the `it8613`-chip. If multiple fans
-are connected (non-trivial on the carrier board; most likely possible on other
-boards), the measurement randomly oscillates between multiple fans...
-
-Thus, to enable the implementation, [`SYSMON_FAN_SPEED`](#usage) needs to be
-explicitly set to `true` (and will only remain `true` if an `it8613`-chip is
-present). Furthermore, a custom kernel driver needs to be compiled:
+To report the status of the fan connected to the fan-header on a
+[LattePanda Mu](https://www.lattepanda.com/lattepanda-mu) (more specifically,
+its DFR1142 Lite Carrier Board with the IT8613E-chip), a custom kernel driver
+needs to be compiled:
 
 ```shell
 sudo apt install \
@@ -280,8 +288,8 @@ the script's behaviour:
     `false`...
 - `SYSMON_FAN_SPEED` (default `false`) – enable fan speed measurement(s) using
   lm-sensors' `sensors`-command
-  - Currently only supported on the [LattePanda Mu](#lattepanda-mu), expect
-    undefined behaviour when enabling this on other devices...
+  - Currently only a handful of sensor chips are supported, see the
+    [fan speed section](#fan-speed) for more details
 
 Echo the `sysmon-mqtt` version and exit:
 
@@ -437,9 +445,13 @@ Optionally, lists of `network-adapters` and `rtt-hosts` can also be passed in:
 
 ```shell
 export SYSMON_HA_BASE=http://homeassistant.local
-sudo -E ./install.sh mqtt-broker.local "Device Name" "eth0 wlan0" \
-  "router.local 8.8.8.8"
+./install.sh  \
+  mqtt-broker.local "Device Name" "eth0 wlan0" "router.local 8.8.8.8"
 ```
+
+**❗N.B.** The installer will try to invoke `sudo` if/when required. If `sudo`
+is not present on the system, you'll need to manually ensure the script runs
+with root-privileges...
 
 All environment-variables that start with `SYSMON_` have their current value
 automatically included in the service-definition.
@@ -466,6 +478,6 @@ For the very brave, the script can be run from GitHub directly:
 ```shell
 export SYSMON_HA_BASE=http://homeassistant.local
 curl -fsSL https://github.com/thijsputman/sysmon-mqtt/raw/main/install.sh |
-  sudo -E bash -s - \
+  bash -s -- \
     mqtt-broker.local "Device Name" "eth0 wlan0" "8.8.8.8 google.com"
 ```
