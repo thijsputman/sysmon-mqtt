@@ -28,6 +28,7 @@ Until December 2023, this script was part of my
 - [Usage](#usage)
   - [Daemon-mode](#daemon-mode)
   - [`systemd`](#systemd)
+    - [Install-script](#install-script)
 
 ## Metrics
 
@@ -170,9 +171,8 @@ defined as three times the reporting interval. For the default configuration
 that would amount to 90 seconds.
 
 When the script starts, a heartbeat of `-1` is reported until the script's
-_second_ iteration; this is done because some of the metrics (`bandwidth`, `rtt`
-and `apt`) are – due to various technical reasons – only reported from the
-second iteration onwards...
+_second_ iteration; this is done because several metrics are – due to various
+technical reasons – only reported from the second iteration onwards...
 
 ### Home Assistant discovery
 
@@ -346,8 +346,8 @@ To stop the daemon, send a `SIGKILL` the _daemon_-process.
 
 ### `systemd`
 
-Alternatively, it's possible to run the script as a `systemd`-service using
-something along the lines of the below configuration:
+It's possible to run the script as a `systemd`-service using something along the
+lines of the below configuration:
 
 **`📄 /etc/systemd/system/sysmon-mqtt.service`**
 
@@ -393,6 +393,8 @@ sudo systemctl daemon-reload
 sudo systemctl enable sysmon-mqtt
 sudo systemctl start sysmon-mqtt
 ```
+
+#### Install-script
 
 To facilitate this setup process, a setup-script (suitable for Debian(-derived)
 distributions) is provided: [`📄 install.sh`](./install.sh). Once installed,
