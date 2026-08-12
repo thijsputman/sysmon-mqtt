@@ -16,7 +16,10 @@ Until December 2023, this script was part of my
 
 - [Metrics](#metrics)
   - [Fan speed](#fan-speed)
+    - [LattePanda Mu](#lattepanda-mu)
   - [Device-specific metrics](#device-specific-metrics)
+    - [Intel N100](#intel-n100)
+    - [Raspberry Pi 5](#raspberry-pi-5)
   - [Heartbeat](#heartbeat)
   - [Home Assistant discovery](#home-assistant-discovery)
   - [APT-check](#apt-check)
@@ -73,6 +76,27 @@ To enable the implementation, [`SYSMON_FAN_SPEED`](#usage) needs to be
 explicitly set to `true` (and will only remain `true` if a supported chip is
 present).
 
+#### LattePanda Mu
+
+To report the status of the fan connected to the fan-header on a
+[LattePanda Mu](https://www.lattepanda.com/lattepanda-mu) (more specifically,
+its DFR1142 Lite Carrier Board with the IT8613E-chip), a custom kernel driver
+needs to be compiled:
+
+```shell
+sudo apt install \
+  dkms \
+  lm-sensors
+git clone git@github.com:frankcrawford/it87.git && cd it87
+make clean
+sudo make dkms
+dkms status
+echo it87 | sudo tee /etc/modules-load.d/it87.conf > /dev/null
+sensors
+```
+
+More details on the kernel-driver: <https://github.com/frankcrawford/it87>
+
 ### Device-specific metrics
 
 #### Intel N100
@@ -110,27 +134,6 @@ echo "kernel.perf_event_paranoid = 2" |
 The `setcap` setting sticks, but might not survive an update of the
 `intel_gpu_top`-binary. The above GitHub-link provides an elegant solution to
 that issue as well.
-
-#### LattePanda Mu
-
-To report the status of the fan connected to the fan-header on a
-[LattePanda Mu](https://www.lattepanda.com/lattepanda-mu) (more specifically,
-its DFR1142 Lite Carrier Board with the IT8613E-chip), a custom kernel driver
-needs to be compiled:
-
-```shell
-sudo apt install \
-  dkms \
-  lm-sensors
-git clone git@github.com:frankcrawford/it87.git && cd it87
-make clean
-sudo make dkms
-dkms status
-echo it87 | sudo tee /etc/modules-load.d/it87.conf > /dev/null
-sensors
-```
-
-More details on the kernel-driver: <https://github.com/frankcrawford/it87>
 
 #### Raspberry Pi 5
 
@@ -285,9 +288,9 @@ the script's behaviour:
   metrics are reported
   - In principle, the interval can lowered all the way down to **zero** for
     real-time reporting (which _will_ negatively impact system performance)
-  - When `rtt-hosts` are provided, the script automatically enforces a minimum
-    reporting interval to ensure the ping-command(s) have sufficient time to
-    complete
+  - When either `rtt-hosts`, `SYSMON_INTEL_GPU`, or `SYSMON_RPI5_POWER` are
+    provided, the script automatically enforces a minimum reporting interval to
+    ensure the respective command(s) have sufficient time to complete
 - `SYSMON_HA_BASE` (default: `""`) – specify Home Assistant's base URL (e.g.,
   `http://homeassistant.local`) to be used as the base for local image resources
   (see [Home Assistant discovery](#home-assistant-discovery))
