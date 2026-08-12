@@ -35,8 +35,7 @@ jobs:
             ~/.cache/go-build
             ~/go/pkg/mod
             ~/go/bin
-          key: pre-commit-cache-\
-            ${{ hashFiles('.pre-commit-config.yaml', '.github/scripts/setup-pre-commit.sh') }}
+          key: pre-commit-cache-${{ hashFiles('.pre-commit-config.yaml', '.github/scripts/setup-pre-commit.sh') }}
       - name: Setup PATH
         run: |
           mkdir -p "$HOME/.local/bin"
