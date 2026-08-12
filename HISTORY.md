@@ -15,7 +15,7 @@ beyond, see
 
 - Report the overall system status (systemd-only; based on the output of
   `systemctl is-system-running`)
-- When the bandwidth of a wireless adapater (ie, its name matches `wl*`) is
+- When the bandwidth of a wireless adapter (ie, its name matches `wl*`) is
   monitored, its signal-strength is also reported
 - `sysmon-mqtt` Version is reported as a diagnostic sensor in Home Assistant
 

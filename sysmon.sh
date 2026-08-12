@@ -3,7 +3,7 @@
 set -euo pipefail
 
 : "${SYSMON_INSTALL_COMMIT:=main}"
-SYSMON_MQTT_VERSION='1.4.1-dev'
+SYSMON_MQTT_VERSION='1.5.0'
 
 if [[ -n $SYSMON_INSTALL_COMMIT && ${SYSMON_INSTALL_COMMIT,,} != main ]]; then
   SYSMON_MQTT_VERSION+="-${SYSMON_INSTALL_COMMIT,,}"
@@ -21,7 +21,6 @@ fi
 : "${SYSMON_HA_TOPIC:=homeassistant}"
 : "${SYSMON_HA_BASE:=}"
 : "${SYSMON_INTERVAL:=30}"
-: "${SYSMON_IN_DOCKER:=false}"
 : "${SYSMON_INTEL_GPU:=true}"
 : "${SYSMON_FAN_SPEED:=false}"
 : "${SYSMON_RPI5_POWER:=true}"
@@ -64,10 +63,9 @@ if (($# > 0)) && [[ $1 == "--daemon" ]]; then
 
 fi
 
-# APT-related metrics make no sense when running inside a Docker-container or
-# when APT is not present on the system
+# APT-related metrics make no sense when APT is not present on the system
 
-if [[ ${SYSMON_IN_DOCKER,,} == "true" ]] || ! command -v apt &> /dev/null; then
+if ! command -v apt &> /dev/null; then
   SYSMON_APT=false
 fi
 
@@ -326,7 +324,7 @@ ha_discover() {
 		EOF
   ) # N.B., EOF-line should be indented with tabs!
 
-  # Report sensor as available if a hearbeat is received within the expiry-
+  # Report sensor as available if a heartbeat is received within the expiry-
   # interval – if no expiry-interval is defined, a simple check (connected > 0)
   # suffices...
 
@@ -651,7 +649,7 @@ while true; do
   mem_used=$(gawk \
     '{printf "%3.2f", (1-($1/$2))*100}' <<< "$mem_avail $mem_total")
 
-  # Bandwith (in kbps; measured over the "sysmon interval")
+  # Bandwidth (in kbps; measured over the "sysmon interval")
 
   payload_bw=()
 

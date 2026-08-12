@@ -16,7 +16,10 @@ Until December 2023, this script was part of my
 
 - [Metrics](#metrics)
   - [Fan speed](#fan-speed)
+    - [LattePanda Mu](#lattepanda-mu)
   - [Device-specific metrics](#device-specific-metrics)
+    - [Intel N100](#intel-n100)
+    - [Raspberry Pi 5](#raspberry-pi-5)
   - [Heartbeat](#heartbeat)
   - [Home Assistant discovery](#home-assistant-discovery)
   - [APT-check](#apt-check)
@@ -24,7 +27,6 @@ Until December 2023, this script was part of my
   - [Broker](#broker)
 - [Usage](#usage)
   - [Daemon-mode](#daemon-mode)
-  - [Docker](#docker)
   - [`systemd`](#systemd)
 
 ## Metrics
@@ -43,7 +45,7 @@ Currently, the following metrics are provided:
   [as reported by `systemctl is-system-running`](https://www.freedesktop.org/software/systemd/man/systemctl.html#is-system-running))
 - `bandwidth` — average bandwidth (receive and transmit) for individual network
   adapters in kbps during the monitoring interval
-  - For wireless adapaters, signal-strength is also reported (detection based on
+  - For wireless adapters, signal-strength is also reported (detection based on
     adapter name matching the `wl*`-pattern; requires `iw`-binary)
 - `rtt` – average round-trip (ie, ping) times in ms to one or more hosts
 - `apt` — number of APT packages that can upgraded
@@ -73,6 +75,27 @@ The currently supported chips are:
 To enable the implementation, [`SYSMON_FAN_SPEED`](#usage) needs to be
 explicitly set to `true` (and will only remain `true` if a supported chip is
 present).
+
+#### LattePanda Mu
+
+To report the status of the fan connected to the fan-header on a
+[LattePanda Mu](https://www.lattepanda.com/lattepanda-mu) (more specifically,
+its DFR1142 Lite Carrier Board with the IT8613E-chip), a custom kernel driver
+needs to be compiled:
+
+```shell
+sudo apt install \
+  dkms \
+  lm-sensors
+git clone git@github.com:frankcrawford/it87.git && cd it87
+make clean
+sudo make dkms
+dkms status
+echo it87 | sudo tee /etc/modules-load.d/it87.conf > /dev/null
+sensors
+```
+
+More details on the kernel-driver: <https://github.com/frankcrawford/it87>
 
 ### Device-specific metrics
 
@@ -111,27 +134,6 @@ echo "kernel.perf_event_paranoid = 2" |
 The `setcap` setting sticks, but might not survive an update of the
 `intel_gpu_top`-binary. The above GitHub-link provides an elegant solution to
 that issue as well.
-
-#### LattePanda Mu
-
-To report the status of the fan connected to the fan-header on a
-[LattePanda Mu](https://www.lattepanda.com/lattepanda-mu) (more specifically,
-its DFR1142 Lite Carrier Board with the IT8613E-chip), a custom kernel driver
-needs to be compiled:
-
-```shell
-sudo apt install \
-  dkms \
-  lm-sensors
-git clone git@github.com:frankcrawford/it87.git && cd it87
-make clean
-sudo make dkms
-dkms status
-echo it87 | sudo tee /etc/modules-load.d/it87.conf > /dev/null
-sensors
-```
-
-More details on the kernel-driver: <https://github.com/frankcrawford/it87>
 
 #### Raspberry Pi 5
 
@@ -182,7 +184,7 @@ By default, the script publishes
 messages to the `homeassistant/sensors/sysmon` topic.
 
 These messages are retained. Any new instance of the script started with an
-already present `device-name` will re-use the existing sensor-entity `unique_id`
+already present `device-name` will reuse the existing sensor-entity `unique_id`
 values (and thus "adopt" the previous instance's sensors in Home Assistant).
 This behaviour is intended to allow "fixed" sensor-entities in Home Assistant
 (which can easily be customised via the GUI).
@@ -286,16 +288,15 @@ the script's behaviour:
   metrics are reported
   - In principle, the interval can lowered all the way down to **zero** for
     real-time reporting (which _will_ negatively impact system performance)
-  - When `rtt-hosts` are provided, the script automatically enforces a minimum
-    reporting interval to ensure the ping-command(s) have sufficient time to
-    complete
+  - When either `rtt-hosts`, `SYSMON_INTEL_GPU`, or `SYSMON_RPI5_POWER` are
+    provided, the script automatically enforces a minimum reporting interval to
+    ensure the respective command(s) have sufficient time to complete
 - `SYSMON_HA_BASE` (default: `""`) – specify Home Assistant's base URL (e.g.,
   `http://homeassistant.local`) to be used as the base for local image resources
   (see [Home Assistant discovery](#home-assistant-discovery))
 - `SYSMON_APT` (default: `true`) — set to `false` to disable reporting
   APT-related metrics (`apt` and `reboot_required`)
-  - Automatically disabled when no `apt`-binary is present, _or_ when running
-    inside a Docker-container (see below)
+  - Automatically disabled when no `apt`-binary is present
 - `SYSMON_APT_CHECK` (default: `«temporary file»`) — override the location of
   the file used to store APT-check's status
 - `SYSMON_RTT_COUNT` (default `4`) — number of ping-requests to send per
@@ -330,7 +331,7 @@ Echo the `sysmon-mqtt` version and exit:
 As of version 1.3.0, `sysmon-mqtt` includes a simple daemon to ensure the main
 monitoring process keeps running (ie, is restarted if it terminates). This is
 primarily intended for embedded devices running minimal Linux-distributions
-lacking amenities like [Docker](#docker) or [systemd](#systemd).
+lacking amenities like [systemd](#systemd).
 
 When started with `--daemon` as its _first_ argument, `sysmon-mqtt` will start
 in daemon-mode and fork off a child-process to do the actual work (all arguments
@@ -342,76 +343,6 @@ All output is redirected to `📄 ~/sysmon-mqtt.log` – this can be controlled 
 the `SYSMON_DAEMON_LOG` environment variable.
 
 To stop the daemon, send a `SIGKILL` the _daemon_-process.
-
-### Docker
-
-The most straightforward (if slightly constrained) way of running the script is
-via the Docker-container published on
-[Docker Hub](https://hub.docker.com/r/thijsputman/sysmon-mqtt) and
-[GHCR](https://github.com/thijsputman/home-assistant-config/pkgs/container/sysmon-mqtt).
-Container images are available for `amd64`, `arm64`, and `armhf`.
-
-For bandwidth monitoring to work, you'll need to mount the host's `/sys`-sysfs
-into the container (as is done in the below
-[`📄 docker-compose.yml`](#docker-composeyml)). Alternatively, you can use
-`network_mode: host` – if you need WiFi signal-strength measurements, use the
-_latter_ approach (`iw` relies on the physical network adapter being accessible;
-mounting `/sys` doesn't suffice).
-
-The `/sys`-approach is preferred as it's more flexible (ie, it can be used to
-gather additional information such as the device model) and offers better
-security: The container's network remains isolated; instead it gains _read-only_
-access to `/sys` with Docker's AppArmor policies applied to prevent access to
-sensitive information.
-
-These AppArmor policies currently _prevent_ reporting the device model from
-inside the container though 😵 — see
-[moby#434199](https://github.com/moby/moby/issues/43419) for details. Until that
-issue is resolved, you'll need to run a privileged container (easiest, if
-slightly too broad, is via `privileged: true`) which is **_not_** worth the risk
-just to have the proper device model reported.
-
-As of version 1.3.0, `sysmon-mqtt` falls back to a more generic device model in
-case it can't read from `/sys/firmware` (e.g., "Raspberry Pi 4 Model B Rev 1.2"
-becomes "BCM2835").
-
-If you don't care about bandwidth monitoring (and/or the device model), the
-`/sys`-mount can be removed.
-
-Finally, the APT-related metrics are automatically _disabled_ when running
-inside a Docker-container. They would report the container's state instead of
-the host's state and thus make no sense. Attempting to "push" this information
-into the container is unwieldy/infeasible (and probably undesirable too).
-
-#### `docker-compose.yml`
-
-```yaml
-version: "2.3"
-services:
-  sysmon-mqtt:
-    image: thijsputman/sysmon-mqtt:latest
-    restart: unless-stopped
-    # Mount host's /sys-sysfs (read-only) into the container
-    volumes:
-      - /sys:/sys:ro
-    # Alternatively, use host networking...
-    # network_mode: host
-    # ...or run in privileged mode (strongly discouraged)
-    # privileged: true
-    environment:
-      - MQTT_BROKER=
-      - DEVICE_NAME=
-      # Optional: Specify network adapters for bandwidth monitoring and/or
-      # hostnames for round-trip times
-      - NETWORK_ADAPTERS=
-      - RTT_HOSTS=
-      # Optional: Drop permissions to the provided UID/GID-combination
-      - PUID=
-      - PGID=
-```
-
-The optional environment variables provided above can of course be passed into
-the Docker-container to further modify its behaviour.
 
 ### `systemd`
 
