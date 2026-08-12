@@ -31,10 +31,28 @@ jobs:
         env:
           GH_CLI_VERSION: 2.42.1
           GH_CLI_URL: https://github.com/cli/cli/releases/download
-      - name: Attach "sysmon.sh" to release
-        if: ${{github.event.release.tag_name}}
+      # The version embedded in the shell-script should match the release-tag
+      - name: Retrieve sysmon-mqtt version
+        env:
+          RELEASE_VERSION: >-
+            ${{ github.event.release.tag_name }}
+        id: sysmon
         run: |
-          gh release upload ${{github.event.release.tag_name}} \
+          semver=$(
+            ./sysmon.sh --version | \
+            grep -oE '[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+(-[-a-z0-9\.]+)?'
+          )
+          if [ "$RELEASE_VERSION" != "v$semver" ]; then
+            printf "::warning::"
+            printf "Invalid sysmon-mqtt version 'v%s' " "$semver"
+            printf "(expected '%s') – " "$RELEASE_VERSION"
+            printf "aborting...\n"
+            exit 1
+          fi
+      - name: Attach "sysmon.sh" to release
+        if: ${{ github.event.release.tag_name }}
+        run: |
+          gh release upload ${{ github.event.release.tag_name }} \
             ./sysmon.sh --clobber
         env:
           GITHUB_TOKEN: ${{ github.TOKEN }}
