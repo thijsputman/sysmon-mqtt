@@ -6,20 +6,10 @@ repos:
       - id: check-case-conflict
       - id: check-executables-have-shebangs
       - id: check-shebang-scripts-are-executable
-        # s6-overlay's scripts shouldn't be executable
-        exclude: |
-          (?x)(
-            rootfs/etc/(
-              cont-init\.d|
-              services\.d|
-              s6-overlay/s6-rc\.d
-            )
-          )
       - id: check-symlinks
       - id: destroyed-symlinks
       - id: detect-private-key
       - id: end-of-file-fixer
-        exclude: (\.nnb|^\.HA_VERSION)$
       - id: forbid-submodules
       - id: mixed-line-ending
         args: [--fix=no]
@@ -28,7 +18,7 @@ repos:
     hooks:
       - id: prettier
         name: Prettier
-        entry: npx --yes prettier --check --ignore-unknown
+        entry: npx --yes prettier --check --ignore-unknown --
         language: system
         types: [text]
       - id: markdownlint
@@ -52,8 +42,18 @@ repos:
         entry: shfmt -l -d
         language: system
         types: [shell]
+      - id: codespell
+        name: codespell
+        entry: codespell -f -H
+        language: system
+        types: [text]
       - id: tdg
         name: TODO get
         entry: .github/scripts/tdg-pre-commit.sh
         language: system
         types: [text]
+      - id: actionlint
+        name: actionlint
+        entry: actionlint
+        language: system
+        files: .github/workflows/.*\.ya?ml

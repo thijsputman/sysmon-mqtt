@@ -24,6 +24,8 @@ fi
 npm install -g markdownlint-cli@0.37.0
 npm install -g prettier@3.0.2
 
+go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.11
+
 pip_cmd=pip3
 if [ "$USE_PIPX" == true ]; then
   pip3 install --user pipx
@@ -32,6 +34,7 @@ fi
 
 $pip_cmd install 'pre-commit==3.3.3'
 $pip_cmd install 'yamllint==1.32.0'
+$pip_cmd install 'codespell==2.3.0'
 
 if ! command -v shellcheck; then
   version=v0.9.0 "${GITHUB_WORKSPACE}/.github/scripts/bins.d/shellcheck"

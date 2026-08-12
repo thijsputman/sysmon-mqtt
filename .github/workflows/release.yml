@@ -15,7 +15,7 @@ jobs:
     needs: [lint]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
       - name: Install GitHub CLI
         # "env.ACT" is added by nektos/act locally – using from-/toJSON prevents
         # the GitHub Actions VS Code extension from complaining about a
@@ -23,11 +23,11 @@ jobs:
         if: ${{ fromJSON(toJSON(env)).ACT }}
         run: |
           mkdir -p "$HOME/.local/bin"
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          gh_cli_file=gh_${GH_CLI_VERSION}_linux_amd64.tar.gz
-          wget $GH_CLI_URL/v$GH_CLI_VERSION/$gh_cli_file
-          tar -xzf $gh_cli_file
-          mv gh_${GH_CLI_VERSION}_linux_amd64/bin/gh ~/.local/bin
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          gh_cli_file="gh_${GH_CLI_VERSION}_linux_amd64.tar.gz"
+          wget "$GH_CLI_URL/v$GH_CLI_VERSION/$gh_cli_file"
+          tar -xzf "$gh_cli_file"
+          mv "gh_${GH_CLI_VERSION}_linux_amd64/bin/gh" ~/.local/bin
         env:
           GH_CLI_VERSION: 2.42.1
           GH_CLI_URL: https://github.com/cli/cli/releases/download

@@ -1,5 +1,10 @@
 extends: default
 rules:
+  comments:
+    min-spaces-from-content: 1
   document-start: disable
   quoted-strings:
     required: only-when-needed
+  line-length:
+    ignore:
+      - .github/workflows/*

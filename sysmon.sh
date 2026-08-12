@@ -324,7 +324,7 @@ ha_discover() {
 		EOF
   ) # N.B., EOF-line should be indented with tabs!
 
-  # Report sensor as available if a hearbeat is received within the expiry-
+  # Report sensor as available if a heartbeat is received within the expiry-
   # interval – if no expiry-interval is defined, a simple check (connected > 0)
   # suffices...
 
@@ -649,7 +649,7 @@ while true; do
   mem_used=$(gawk \
     '{printf "%3.2f", (1-($1/$2))*100}' <<< "$mem_avail $mem_total")
 
-  # Bandwith (in kbps; measured over the "sysmon interval")
+  # Bandwidth (in kbps; measured over the "sysmon interval")
 
   payload_bw=()
 

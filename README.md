@@ -45,7 +45,7 @@ Currently, the following metrics are provided:
   [as reported by `systemctl is-system-running`](https://www.freedesktop.org/software/systemd/man/systemctl.html#is-system-running))
 - `bandwidth` — average bandwidth (receive and transmit) for individual network
   adapters in kbps during the monitoring interval
-  - For wireless adapaters, signal-strength is also reported (detection based on
+  - For wireless adapters, signal-strength is also reported (detection based on
     adapter name matching the `wl*`-pattern; requires `iw`-binary)
 - `rtt` – average round-trip (ie, ping) times in ms to one or more hosts
 - `apt` — number of APT packages that can upgraded
@@ -184,7 +184,7 @@ By default, the script publishes
 messages to the `homeassistant/sensors/sysmon` topic.
 
 These messages are retained. Any new instance of the script started with an
-already present `device-name` will re-use the existing sensor-entity `unique_id`
+already present `device-name` will reuse the existing sensor-entity `unique_id`
 values (and thus "adopt" the previous instance's sensors in Home Assistant).
 This behaviour is intended to allow "fixed" sensor-entities in Home Assistant
 (which can easily be customised via the GUI).
