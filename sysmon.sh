@@ -3,7 +3,7 @@
 set -euo pipefail
 
 : "${SYSMON_INSTALL_COMMIT:=main}"
-SYSMON_MQTT_VERSION='1.5.0'
+SYSMON_MQTT_VERSION='1.5.1'
 
 if [[ -n $SYSMON_INSTALL_COMMIT && ${SYSMON_INSTALL_COMMIT,,} != main ]]; then
   SYSMON_MQTT_VERSION+="-${SYSMON_INSTALL_COMMIT,,}"
@@ -24,6 +24,7 @@ fi
 : "${SYSMON_INTEL_GPU:=true}"
 : "${SYSMON_FAN_SPEED:=false}"
 : "${SYSMON_RPI5_POWER:=true}"
+: "${SYSMON_FEMON:=true}"
 : "${SYSMON_APT:=true}"
 : "${SYSMON_APT_CHECK:=}"
 : "${SYSMON_RTT_COUNT:=4}"
@@ -97,8 +98,18 @@ then
   SYSMON_RPI5_POWER=false
 fi
 
+# Check for presence of `dvb-fe-tool` and a DVB-T front-end
+
+if
+  [[ ${SYSMON_FEMON,,} == "true" ]] &&
+    (! command -v dvb-fe-tool &> /dev/null || ! dvb-fe-tool -g &> /dev/null)
+then
+  SYSMON_FEMON=false
+fi
+
 # The fan-speed implementation is crude, disable it unless an explicitly
 # supported chip is detected.
+
 if [[ ${SYSMON_FAN_SPEED,,} == "true" ]]; then
   SYSMON_FAN_SPEED="false"
   sensors_fans=(it8613-\* pwmfan-\*)
@@ -155,6 +166,8 @@ if [[ ${SYSMON_RPI5_POWER,,} == "true" ]]; then
   fi
 fi
 
+# XXX Femon takes 4-seconds too...
+
 # Compute number of ticks per hour; additionally, forces $SYSMON_INTERVAL to
 # base10 — exits in case of an invalid value for the interval
 
@@ -184,6 +197,9 @@ goodbye() {
   fi
   if { : >&5; } 2> /dev/null; then
     exec 5>&-
+  fi
+  if { : >&6; } 2> /dev/null; then
+    exec 6>&-
   fi
   if [[ -v temp_dir && -d $temp_dir ]]; then
     rm -rf "$temp_dir"
@@ -322,7 +338,7 @@ ha_discover() {
         {{ none }}
       {% endif%}
 		EOF
-  ) # N.B., EOF-line should be indented with tabs!
+  ) # N.B., EOF-line should be indented with tabs
 
   # Report sensor as available if a heartbeat is received within the expiry-
   # interval – if no expiry-interval is defined, a simple check (connected > 0)
@@ -337,7 +353,7 @@ ha_discover() {
         seconds = ${expire_after}) >= now()
       else 'offline'
 			EOF
-    ) # N.B., EOF-line should be indented with tabs!
+    ) # N.B., EOF-line should be indented with tabs
   else
     availability_template="'online' if value | int(0) > 0 else 'offline'"
   fi
@@ -436,7 +452,7 @@ ha_discover() {
       }
     }
 		EOF
-  ) # N.B., EOF-line should be indented with tabs!
+  ) # N.B., EOF-line should be indented with tabs
 
   mosquitto_pub -r -q 1 -h "$mqtt_host" \
     -t "${ha_topic}/$entity/sysmon/${device}_${attribute//\//_}/config" \
@@ -448,16 +464,16 @@ if [[ ${SYSMON_HA_DISCOVER,,} == "true" ]]; then
   ha_discover 'Version (sysmon-mqtt)' version mdi:new-box
 
   ha_discover Heartbeat heartbeat mdi:heart-pulse timestamp
-  ha_discover Uptime uptime mdi:timer-outline duration s
-  ha_discover 'CPU load' cpu_load mdi:chip '' %
-  ha_discover 'Memory usage' mem_used mdi:memory '' %
+  ha_discover Uptime uptime mdi:timer-outline duration s 0
+  ha_discover 'CPU load' cpu_load mdi:chip '' % 1
+  ha_discover 'Memory usage' mem_used mdi:memory '' % 1
 
   if ls /sys/class/thermal/thermal_zone*/temp &> /dev/null; then
-    ha_discover 'CPU temperature' cpu_temp '' temperature °C
+    ha_discover 'CPU temperature' cpu_temp '' temperature °C 1
   fi
 
   if [[ ${SYSMON_FAN_SPEED,,} == "true" ]]; then
-    ha_discover 'Fan speed' fan_speed mdi:fan '' RPM
+    ha_discover 'Fan speed' fan_speed mdi:fan '' RPM 0
   fi
 
   if [[ -d /run/systemd/system ]]; then
@@ -465,13 +481,19 @@ if [[ ${SYSMON_HA_DISCOVER,,} == "true" ]]; then
   fi
 
   if [[ ${SYSMON_INTEL_GPU,,} == "true" ]]; then
-    ha_discover 'GPU load' gpu_load mdi:expansion-card '' %
-    ha_discover 'GPU power' gpu_power '' power W
-    ha_discover 'Package power' pkg_power '' power W
+    ha_discover 'GPU load' gpu_load mdi:expansion-card '' % 1
+    ha_discover 'GPU power' gpu_power '' power W 2
+    ha_discover 'Package power' pkg_power '' power W 2
   fi
 
   if [[ ${SYSMON_RPI5_POWER,,} == "true" ]]; then
-    ha_discover 'RPi5 power' rpi5_power '' power W
+    ha_discover 'RPi5 power' rpi5_power '' power W 2
+  fi
+
+  if [[ ${SYSMON_FEMON,,} == "true" ]]; then
+    ha_discover 'DVB-T signal strength' dvbt_signal mdi:radio-tower \
+      signal_strength dBm 1
+    ha_discover 'DVB-T SNR' dvbt_snr mdi:broadcast signal_strength dB 1
   fi
 
   for eth_adapter in "${eth_adapters[@]}"; do
@@ -572,6 +594,15 @@ if [[ ${SYSMON_RPI5_POWER,,} == "true" ]]; then
 fi
 
 rpi5_power=""
+
+# DVB-T "femon" metrics output ("anonymous" pipe; fd 6)
+if [[ ${SYSMON_FEMON,,} == "true" ]]; then
+  femon_result="$temp_dir/femon"
+  mkfifo "$femon_result" && exec 6<> "$femon_result"
+  unset -v femon_result
+fi
+
+payload_femon=""
 
 # ZFS ARC — minimum size
 if [[ -f /proc/spl/kstat/zfs/arcstats ]]; then
@@ -690,7 +721,7 @@ while true; do
           "tx": "$payload_tx"
         }
 				EOF
-      )") # N.B., EOF-line should be indented with tabs!
+      )") # N.B., EOF-line should be indented with tabs
 
     fi
 
@@ -736,7 +767,7 @@ while true; do
             "$(mqtt_json_clean "$rtt_host")":
               "$(printf '%4.3f' "${result[1]}")"
 						EOF
-          )") # N.B., EOF-line should be indented with tabs!
+          )") # N.B., EOF-line should be indented with tabs
 
         fi
 
@@ -744,6 +775,7 @@ while true; do
 
       _join , "${rtt_times[@]}" >&3
       printf '\0' >&3
+
     ) &
 
   fi
@@ -784,8 +816,9 @@ while true; do
           "gpu_power": "$gpu_power",
           "pkg_power": "$pkg_power",
 				EOF
-        printf '\0' >&4 # N.B., EOF-line should be indented with tabs!
-      fi
+      fi # N.B., EOF-line should be indented with tabs
+
+      printf '\0' >&4
 
     ) &
 
@@ -805,7 +838,7 @@ while true; do
       for ((i = 0; i < $((10#$SYSMON_INTERVAL - 5)); i = i + 5)); do
 
         # Current-readings are leading; volt-readings without a matching current
-        # (e.g., `EXT5V_V`, `BATT_V`) are dropped
+        # (e.g., $(EXT5V_V), $(BATT_V)) are dropped
         sample_mw=$(
           vcgencmd pmic_read_adc 2> /dev/null | gawk '
             {
@@ -852,6 +885,46 @@ while true; do
       fi
 
       printf '\0' >&5
+
+    ) &
+
+  fi
+
+  # DVB-T ("femon") metrics
+
+  if { : >&6; } 2> /dev/null; then
+
+    # shellcheck disable=SC2034 # Indirect reference only
+    payload_femon=$(_readfd 6)
+
+    (
+
+      result=$(
+        timeout -s KILL --foreground 5s \
+          dvb-fe-tool --femon 2>&1 |
+          gawk '
+            BEGIN { FS="=" }
+            {
+              gsub(/[^-.0-9]/, "", $3); signal += $3
+              gsub(/[^-.0-9]/, "", $4); snr += $4
+              n++
+            }
+            END {
+              if (n > 0 && (signal > 0 || snr > 0))
+                printf "%.2f %.2f", signal/n, snr/n
+            }'
+      ) || true # Prevent the SIGPIPE from triggering "pipefail"
+
+      if [[ -n $result ]]; then
+        read -r signal snr <<< "$result"
+        tr -s ' ' <<- EOF >&6
+          "dvbt_signal": "$signal",
+          "dvbt_snr": "$snr",
+				EOF
+      fi # N.B., EOF-line should be indented with tabs
+
+      printf '\0' >&6
+
     ) &
 
   fi
@@ -872,7 +945,7 @@ while true; do
         "latest_version": "$(head -n 1 "$apt_check")",
         "release_summary": $(tail -n +3 "$apt_check")
 				EOF
-      )") # N.B., EOF-line should be indented with tabs!
+      )") # N.B., EOF-line should be indented with tabs
 
     fi
 
@@ -928,6 +1001,7 @@ while true; do
       $(_optional_field rpi5_power)
       $(_optional_field status)
       $payload_intel_gpu
+      $payload_femon
       "bandwidth": {
         $(_join , "${payload_bw[@]}")
       },
@@ -940,7 +1014,7 @@ while true; do
       }
     }
 		EOF
-  ) # N.B., EOF-line should be indented with tabs!
+  ) # N.B., EOF-line should be indented with tabs
 
   mosquitto_pub -h "$mqtt_host" \
     -t "sysmon/$device/state" -m "$payload" || true
